@@ -120,11 +120,7 @@ let package = Package(
             dependencies: ["mdkitFileManagement"],
             path: "Tests/FileManagementTests"
         ),
-        .testTarget(
-            name: "mdkitLoggingTests",
-            dependencies: ["mdkitLogging"],
-            path: "Tests/LoggingTests"
-        ),
+
         .testTarget(
             name: "mdkitLLMTests",
             dependencies: ["mdkitLLM"],

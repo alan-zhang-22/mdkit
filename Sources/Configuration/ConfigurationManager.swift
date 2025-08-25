@@ -28,8 +28,9 @@ public class ConfigurationManager: ConfigurationManaging {
     
     // MARK: - Initialization
     
-    public init(logger: Logger) {
-        self.logger = logger
+    public init() {
+        // Create our own logger for this manager
+        self.logger = Logger(label: "mdkit.configuration")
     }
     
     // MARK: - Public Methods

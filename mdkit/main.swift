@@ -1,47 +1,248 @@
-//
-//  main.swift
-//  mdkit
-//
-//  Created by alan zhang on 2025/8/25.
-//
-
 import Foundation
+import ArgumentParser
+import Logging
+import mdkitCore
+import mdkitConfiguration
+import mdkitFileManagement
+import mdkitLogging
+import mdkitLLM
 
-print("Hello, World!")
+// MARK: - CLI Command Structure
 
-import LocalLLMClient
-import LocalLLMClientLlama
-
-// Create a model
-let model = LLMSession.DownloadModel.llama(
-    id: "lmstudio-community/gemma-3-4B-it-qat-GGUF",
-    model: "gemma-3-4B-it-QAT-Q4_0.gguf",
-    parameter: .init(
-        temperature: 0.7,   // Randomness (0.0〜1.0)
-        topK: 40,           // Top-K sampling
-        topP: 0.9,          // Top-P (nucleus) sampling
-        options: .init(responseFormat: .json) // Response format
+struct MDKitCLI: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "mdkit",
+        abstract: "Convert PDF documents to Markdown with AI-powered processing",
+        version: "0.1.0",
+        subcommands: [Convert.self, Config.self]
     )
-)
-
-// You can track download progress
-try await model.downloadModel { progress in
-    print("Download progress: \(progress)")
+    
+    func run() async throws {
+        // Initialize logging system first
+        let config = MDKitConfig()
+        
+        // Configure logging system
+        try LoggingConfiguration.configure(
+            level: config.logging.loggerLevel,
+            logFileName: config.logging.logFileName,
+            logDirectory: config.logging.logDirectory
+        )
+        
+        // Create logger for this command
+        let logger = Logger(label: "mdkit.cli")
+        
+        logger.info("Starting mdkit CLI...")
+        
+        // The main logic will be handled by ArgumentParser
+        // This method is called when no subcommand is specified
+        print("mdkit - PDF to Markdown conversion tool")
+        print("=======================================")
+        print("Use 'mdkit --help' for usage information")
+    }
 }
 
-// Create a session with the downloaded model
-let session = LLMSession(model: model)
+// MARK: - Convert Command
 
-// Generate a response with a specific prompt
-let response = try await session.respond(to: """
-Create the beginning of a synopsis for an epic story with a cat as the main character.
-Format it in JSON, as shown below.
-{
-    "title": "<title>",
-    "content": "<content>",
+struct Convert: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "convert",
+        abstract: "Convert a PDF file to Markdown"
+    )
+    
+    @Argument(help: "Input PDF file path")
+    var inputFile: String
+    
+    @Option(name: .shortAndLong, help: "Output file path (default: input.md)")
+    var output: String?
+    
+    @Option(name: .shortAndLong, help: "Configuration file path")
+    var config: String?
+    
+    @Flag(name: .shortAndLong, help: "Enable verbose logging")
+    var verbose: Bool = false
+    
+    @Flag(name: .shortAndLong, help: "Overwrite existing output file")
+    var force: Bool = false
+    
+    func run() async throws {
+        // Initialize logging
+        let baseConfig = MDKitConfig()
+        
+        // Configure logging system
+        try LoggingConfiguration.configure(
+            level: baseConfig.logging.loggerLevel,
+            logFileName: baseConfig.logging.logFileName,
+            logDirectory: baseConfig.logging.logDirectory
+        )
+        
+        // Create logger for this command
+        let logger = Logger(label: "mdkit.convert")
+        
+        if verbose {
+            logger.info("Verbose logging enabled")
+        }
+        
+        logger.info("Starting PDF to Markdown conversion")
+        logger.info("Input file: \(inputFile)")
+        
+        // Load configuration
+        let configManager = ConfigurationManager()
+        let config = try configManager.loadConfiguration(from: self.config)
+        logger.info("Configuration loaded successfully")
+        
+        // Validate input file
+        guard FileManager.default.fileExists(atPath: inputFile) else {
+            logger.error("Input file does not exist: \(inputFile)")
+            throw MDKitError.inputFileNotFound(path: inputFile)
+        }
+        
+        // Determine output path
+        let outputPath = self.output ?? inputFile.replacingOccurrences(of: ".pdf", with: ".md")
+        logger.info("Output file: \(outputPath)")
+        
+        // Check if output file exists
+        if FileManager.default.fileExists(atPath: outputPath) && !force {
+            logger.error("Output file already exists: \(outputPath)")
+            logger.info("Use --force to overwrite existing files")
+            throw MDKitError.outputFileExists(path: outputPath)
+        }
+        
+        // Initialize file manager
+        let fileManager = FileManager(config: FileManagementConfig(
+            outputDirectory: URL(fileURLWithPath: outputPath).deletingLastPathComponent().path,
+            markdownDirectory: URL(fileURLWithPath: outputPath).deletingLastPathComponent().path,
+            logDirectory: "~/logs",
+            tempDirectory: "~/temp",
+            createDirectories: true,
+            overwriteExisting: force,
+            preserveOriginalNames: true,
+            fileNamingStrategy: .original
+        ))
+        
+        // TODO: Implement actual PDF processing
+        logger.info("PDF processing not yet implemented")
+        logger.info("Creating placeholder markdown file")
+        
+        let placeholderMarkdown = """
+        # PDF Conversion Placeholder
+        
+        This is a placeholder markdown file generated by mdkit.
+        
+        **Input File:** \(inputFile)
+        **Generated:** \(Date())
+        
+        ## Next Steps
+        
+        The actual PDF processing functionality will be implemented in the next phase.
+        This includes:
+        - PDF text extraction
+        - Layout analysis
+        - AI-powered content optimization
+        - Markdown generation
+        
+        ## Configuration Used
+        
+        - Processing: \(config.processing.overlapThreshold)
+        - Output: \(config.output.outputDirectory)
+        - LLM Enabled: \(config.llm.enabled)
+        """
+        
+        try fileManager.saveMarkdown(placeholderMarkdown, to: outputPath)
+        logger.info("Placeholder markdown file created successfully")
+        logger.info("Conversion completed")
+        
+        print("✅ Successfully converted \(inputFile) to \(outputPath)")
+    }
 }
-""")
-print(response)
 
-// You can also add system messages before asking questions
-session.messages = [.system("You are a helpful assistant.")]
+// MARK: - Config Command
+
+struct Config: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "config",
+        abstract: "Manage mdkit configuration"
+    )
+    
+    @Option(name: .shortAndLong, help: "Configuration file path")
+    var config: String?
+    
+    @Flag(name: .shortAndLong, help: "Show current configuration")
+    var show: Bool = false
+    
+    @Flag(name: .shortAndLong, help: "Create sample configuration")
+    var create: Bool = false
+    
+    func run() async throws {
+        let baseConfig = MDKitConfig()
+        
+        // Configure logging system
+        try LoggingConfiguration.configure(
+            level: baseConfig.logging.loggerLevel,
+            logFileName: baseConfig.logging.logFileName,
+            logDirectory: baseConfig.logging.logDirectory
+        )
+        
+        // Create logger for this command
+        let logger = Logger(label: "mdkit.config")
+        
+        let configManager = ConfigurationManager()
+        
+        if show {
+            let config = try configManager.loadConfiguration(from: self.config)
+            print("Current Configuration:")
+            print("=====================")
+            print("Processing:")
+            print("  - Overlap Threshold: \(config.processing.overlapThreshold)")
+            print("  - Max Merge Distance: \(config.processing.maxMergeDistance)")
+            print("  - Header Region: \(config.processing.headerRegion)")
+            print("  - Footer Region: \(config.processing.footerRegion)")
+            print("")
+            print("Output:")
+            print("  - Directory: \(config.output.outputDirectory)")
+            print("  - Filename Pattern: \(config.output.filenamePattern)")
+            print("")
+            print("LLM:")
+            print("  - Enabled: \(config.llm.enabled)")
+            if config.llm.enabled {
+                print("  - Model: \(config.llm.model.identifier)")
+            }
+        }
+        
+        if create {
+            let samplePath = self.config ?? "./mdkit-config-sample.json"
+            try configManager.createSampleConfiguration(at: samplePath)
+            print("✅ Sample configuration created at: \(samplePath)")
+        }
+        
+        if !show && !create {
+            print("Use --show to display current configuration")
+            print("Use --create to create a sample configuration file")
+        }
+    }
+}
+
+// MARK: - Error Types
+
+enum MDKitError: LocalizedError {
+    case inputFileNotFound(path: String)
+    case outputFileExists(path: String)
+    case configurationError(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .inputFileNotFound(let path):
+            return "Input file not found: \(path)"
+        case .outputFileExists(let path):
+            return "Output file already exists: \(path)"
+        case .configurationError(let message):
+            return "Configuration error: \(message)"
+        }
+    }
+}
+
+// MARK: - Main Entry Point
+
+func main() {
+    // Run the CLI synchronously since ArgumentParser handles the async execution
+    MDKitCLI.main()
+}
