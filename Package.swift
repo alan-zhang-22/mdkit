@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "mdkitLibraries",
     platforms: [
-        .macOS(.v14) // Compatible with Swift Package Manager 6.0
+        .macOS(.v26) // Required for RecognizeDocumentsRequest and DocumentObservation
     ],
     products: [
         // Executable target for command-line usage

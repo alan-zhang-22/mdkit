@@ -20,11 +20,12 @@ final class DocumentElementTests: XCTestCase {
     
     func testElementTypeCases() {
         // Test that all cases are accessible
-        XCTAssertEqual(ElementType.allCases.count, 12)
+        XCTAssertEqual(ElementType.allCases.count, 13)
         XCTAssertTrue(ElementType.allCases.contains(.title))
         XCTAssertTrue(ElementType.allCases.contains(.textBlock))
         XCTAssertTrue(ElementType.allCases.contains(.paragraph))
         XCTAssertTrue(ElementType.allCases.contains(.header))
+        XCTAssertTrue(ElementType.allCases.contains(.footer))
         XCTAssertTrue(ElementType.allCases.contains(.table))
         XCTAssertTrue(ElementType.allCases.contains(.list))
         XCTAssertTrue(ElementType.allCases.contains(.listItem))
@@ -40,6 +41,7 @@ final class DocumentElementTests: XCTestCase {
         XCTAssertEqual(ElementType.textBlock.description, "Text Block")
         XCTAssertEqual(ElementType.paragraph.description, "Paragraph")
         XCTAssertEqual(ElementType.header.description, "Header")
+        XCTAssertEqual(ElementType.footer.description, "Footer")
         XCTAssertEqual(ElementType.table.description, "Table")
         XCTAssertEqual(ElementType.list.description, "List")
         XCTAssertEqual(ElementType.listItem.description, "List Item")
@@ -56,6 +58,7 @@ final class DocumentElementTests: XCTestCase {
         XCTAssertTrue(ElementType.textBlock.isTextBased)
         XCTAssertTrue(ElementType.paragraph.isTextBased)
         XCTAssertTrue(ElementType.header.isTextBased)
+        XCTAssertTrue(ElementType.footer.isTextBased)
         XCTAssertTrue(ElementType.listItem.isTextBased)
         XCTAssertTrue(ElementType.footnote.isTextBased)
         XCTAssertTrue(ElementType.pageNumber.isTextBased)
@@ -77,6 +80,7 @@ final class DocumentElementTests: XCTestCase {
         // Non-mergeable elements
         XCTAssertFalse(ElementType.title.isMergeable)
         XCTAssertFalse(ElementType.header.isMergeable)
+        XCTAssertFalse(ElementType.footer.isMergeable)
         XCTAssertFalse(ElementType.table.isMergeable)
         XCTAssertFalse(ElementType.list.isMergeable)
         XCTAssertFalse(ElementType.barcode.isMergeable)

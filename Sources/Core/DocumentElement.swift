@@ -76,6 +76,9 @@ public enum ElementType: String, CaseIterable, Codable {
     /// Section header or subheading
     case header = "header"
     
+    /// Footer content
+    case footer = "footer"
+    
     /// Table structure
     case table = "table"
     
@@ -107,6 +110,7 @@ public enum ElementType: String, CaseIterable, Codable {
         case .textBlock: return "Text Block"
         case .paragraph: return "Paragraph"
         case .header: return "Header"
+        case .footer: return "Footer"
         case .table: return "Table"
         case .list: return "List"
         case .listItem: return "List Item"
@@ -121,7 +125,7 @@ public enum ElementType: String, CaseIterable, Codable {
     /// Whether this element type contains text content
     public var isTextBased: Bool {
         switch self {
-        case .title, .textBlock, .paragraph, .header, .listItem, .footnote, .pageNumber:
+        case .title, .textBlock, .paragraph, .header, .footer, .listItem, .footnote, .pageNumber:
             return true
         case .table, .list, .barcode, .image, .unknown:
             return false
@@ -133,7 +137,7 @@ public enum ElementType: String, CaseIterable, Codable {
         switch self {
         case .textBlock, .paragraph, .listItem:
             return true
-        case .title, .header, .table, .list, .barcode, .image, .footnote, .pageNumber, .unknown:
+        case .title, .header, .footer, .table, .list, .barcode, .image, .footnote, .pageNumber, .unknown:
             return false
         }
     }
