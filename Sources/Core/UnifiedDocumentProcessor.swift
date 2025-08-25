@@ -2,6 +2,8 @@ import Foundation
 import Vision
 import CoreGraphics
 import Logging
+import PDFKit
+import AppKit
 
 // MARK: - Document Processing Error
 
@@ -334,21 +336,188 @@ public class UnifiedDocumentProcessor {
         else { return 6 }
     }
     
+    // MARK: - Page Range Parsing
+    
+    /// Parse page range specification into array of page numbers
+    /// Supports formats: "5" (single), "5,7" (multiple), "5-7" (range), "all" (all pages)
+    /// - Parameter pageRange: String specifying page range (e.g., "5", "5,7", "5-7", "all")
+    /// - Parameter totalPages: Total number of pages in PDF
+    /// - Returns: Array of page numbers (1-indexed) to process
+    /// - Throws: DocumentProcessingError for invalid page ranges
+    private func parsePageRange(_ pageRange: String?, totalPages: Int) throws -> [Int] {
+        guard let pageRange = pageRange, !pageRange.isEmpty else {
+            // No page range specified, process all pages
+            return Array(1...totalPages)
+        }
+        
+        let trimmedRange = pageRange.trimmingCharacters(in: .whitespaces)
+        
+        if trimmedRange.lowercased() == "all" {
+            return Array(1...totalPages)
+        }
+        
+        var pageNumbers: Set<Int> = []
+        let components = trimmedRange.components(separatedBy: ",")
+        
+        for component in components {
+            let trimmedComponent = component.trimmingCharacters(in: .whitespaces)
+            
+            if trimmedComponent.contains("-") {
+                // Handle range (e.g., "5-7")
+                let rangeComponents = trimmedComponent.components(separatedBy: "-")
+                guard rangeComponents.count == 2,
+                      let startPage = Int(rangeComponents[0].trimmingCharacters(in: .whitespaces)),
+                      let endPage = Int(rangeComponents[1].trimmingCharacters(in: .whitespaces)) else {
+                    throw DocumentProcessingError.unsupportedOperation("Invalid page range format: \(trimmedComponent)")
+                }
+                
+                guard startPage >= 1 && endPage <= totalPages && startPage <= endPage else {
+                    throw DocumentProcessingError.unsupportedOperation("Page range \(startPage)-\(endPage) is invalid for PDF with \(totalPages) pages")
+                }
+                
+                pageNumbers.formUnion(startPage...endPage)
+                
+            } else {
+                // Handle single page number
+                guard let pageNumber = Int(trimmedComponent) else {
+                    throw DocumentProcessingError.unsupportedOperation("Invalid page number: \(trimmedComponent)")
+                }
+                
+                guard pageNumber >= 1 && pageNumber <= totalPages else {
+                    throw DocumentProcessingError.unsupportedOperation("Page number \(pageNumber) is invalid for PDF with \(totalPages) pages")
+                }
+                
+                pageNumbers.insert(pageNumber)
+            }
+        }
+        
+        // Convert to sorted array
+        return Array(pageNumbers).sorted()
+    }
+    
+    // MARK: - PDF to Image Conversion
+    
+    /// Convert a PDF page to NSImage
+    /// - Parameter page: PDFPage to convert
+    /// - Returns: NSImage representation of the page
+    /// - Throws: DocumentProcessingError if conversion fails
+    private func convertPDFPageToImage(_ page: PDFPage) throws -> NSImage {
+        let pageRect = page.bounds(for: .mediaBox)
+        
+        // Create image with appropriate size (maintain aspect ratio)
+        let image = NSImage(size: pageRect.size)
+        
+        image.lockFocus()
+        
+        // Set background to white
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: pageRect.size).fill()
+        
+        // Draw PDF page
+        page.draw(with: .mediaBox, to: NSGraphicsContext.current!.cgContext)
+        
+        image.unlockFocus()
+        
+        return image
+    }
+    
+    /// Convert NSImage to Data (PNG format)
+    /// - Parameter image: NSImage to convert
+    /// - Returns: PNG data representation
+    /// - Throws: DocumentProcessingError if conversion fails
+    private func convertNSImageToData(_ image: NSImage) throws -> Data {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+            throw DocumentProcessingError.unsupportedOperation("Failed to convert image to PNG data")
+        }
+        
+        return pngData
+    }
+    
+    /// Convert specified PDF pages to images
+    /// - Parameter pdfURL: URL to the PDF document
+    /// - Parameter pageRange: Optional page range specification (e.g., "5", "5,7", "5-7", "all")
+    /// - Returns: Array of image data for specified pages
+    /// - Throws: DocumentProcessingError if conversion fails
+    private func convertPDFToImages(_ pdfURL: URL, pageRange: String? = nil) async throws -> [Data] {
+        // Get PDF information
+        let (pageCount, pdfDocument) = try getPDFInfo(from: pdfURL)
+        
+        // Parse page range
+        let pagesToProcess = try parsePageRange(pageRange, totalPages: pageCount)
+        logger.info("Processing \(pagesToProcess.count) pages: \(pagesToProcess)")
+        
+        var pageImages: [Data] = []
+        
+        for pageNumber in pagesToProcess {
+            let pageIndex = pageNumber - 1 // Convert to 0-indexed
+            
+            guard let page = pdfDocument.page(at: pageIndex) else {
+                logger.warning("Failed to get page \(pageNumber), skipping")
+                continue
+            }
+            
+            do {
+                // Convert PDF page to image
+                let image = try convertPDFPageToImage(page)
+                
+                // Convert NSImage to Data
+                let imageData = try convertNSImageToData(image)
+                
+                pageImages.append(imageData)
+                logger.debug("Successfully converted page \(pageNumber) to image (\(imageData.count) bytes)")
+                
+            } catch {
+                logger.warning("Failed to convert page \(pageNumber): \(error.localizedDescription)")
+                // Continue with other pages instead of failing completely
+            }
+        }
+        
+        guard !pageImages.isEmpty else {
+            throw DocumentProcessingError.unsupportedOperation("No pages were successfully converted to images")
+        }
+        
+        logger.info("Successfully converted \(pageImages.count) pages to images")
+        return pageImages
+    }
+    
+    // MARK: - PDF Information
+    
+    /// Get PDF document information including page count
+    /// - Parameter pdfURL: URL to the PDF document
+    /// - Returns: Tuple with page count and PDFDocument reference
+    /// - Throws: DocumentProcessingError if PDF cannot be loaded
+    private func getPDFInfo(from pdfURL: URL) throws -> (pageCount: Int, document: PDFDocument) {
+        guard let pdfDocument = PDFDocument(url: pdfURL) else {
+            throw DocumentProcessingError.unsupportedOperation("Failed to load PDF document from \(pdfURL.path)")
+        }
+        
+        let pageCount = pdfDocument.pageCount
+        guard pageCount > 0 else {
+            throw DocumentProcessingError.unsupportedOperation("PDF document has no pages")
+        }
+        
+        logger.info("PDF loaded successfully: \(pageCount) pages")
+        return (pageCount, pdfDocument)
+    }
+    
     // MARK: - PDF Processing
     
     /// Process a PDF document by converting pages to images and processing each page sequentially
     /// - Parameter pdfURL: URL to the PDF document
     /// - Parameter outputFileURL: URL where the final markdown file will be written
+    /// - Parameter pageRange: Optional page range specification (e.g., "5", "5,7", "5-7", "all")
     /// - Returns: DocumentProcessingResult with processing summary
     /// - Throws: DocumentProcessingError if processing fails
     @available(macOS 26.0, *)
-    public func processPDF(_ pdfURL: URL, outputFileURL: URL) async throws -> DocumentProcessingResult {
+    public func processPDF(_ pdfURL: URL, outputFileURL: URL, pageRange: String? = nil) async throws -> DocumentProcessingResult {
         let startTime = Date()
         
         logger.info("Starting PDF processing: \(pdfURL.lastPathComponent)")
         
         // Convert PDF pages to images
-        let pageImages = try await convertPDFToImages(pdfURL)
+        let pageImages = try await convertPDFToImages(pdfURL, pageRange: pageRange)
         logger.info("PDF converted to \(pageImages.count) page images")
         
         var totalDuplicatesRemoved = 0
