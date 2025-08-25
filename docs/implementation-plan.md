@@ -8,7 +8,7 @@ This document outlines the implementation plan for mdkit, a PDF to Markdown conv
 
 **Last Updated**: August 25, 2025  
 **Current Phase**: Phase 2 - Document Processing Core  
-**Overall Progress**: ~35% Complete
+**Overall Progress**: ~45% Complete
 
 ## Project Structure
 
@@ -20,7 +20,7 @@ mdkit/
 │   │   ├── UnifiedDocumentProcessor.swift ✅ COMPLETED
 │   │   ├── HeaderFooterDetector.swift ❌ NOT STARTED
 │   │   ├── HeaderAndListDetector.swift ❌ NOT STARTED
-│   │   └── MarkdownGenerator.swift ❌ NOT STARTED
+│   │   └── MarkdownGenerator.swift ✅ COMPLETED
 │   ├── Configuration/
 │   │   ├── ConfigurationManager.swift ✅ COMPLETED
 │   │   ├── MDKitConfig.swift ✅ COMPLETED
@@ -123,27 +123,31 @@ mdkit/
 - [x] Add logging for overlap analysis
 - [x] Test with various overlap scenarios
 
-#### 2.3 Basic Markdown Generation ❌ NOT STARTED
-- [ ] Implement `MarkdownGenerator` class
-- [ ] Add support for basic element types (text, paragraphs)
-- [ ] Create markdown formatting utilities
-- [ ] Add unit tests for markdown generation
+#### 2.3 Basic Markdown Generation ✅ COMPLETED
+- [x] Implement `MarkdownGenerator` class
+- [x] Add support for basic element types (text, paragraphs)
+- [x] Create markdown formatting utilities
+- [x] Add unit tests for markdown generation
+- [x] Implement table of contents generation
+- [x] Add multiple markdown flavor support
 
-**Deliverables:** 🔄 **PARTIALLY COMPLETED**
+**Deliverables:** ✅ **COMPLETED**
 - ✅ Unified document processor
 - ✅ Duplication detection system
-- ❌ Basic markdown generation
+- ✅ Basic markdown generation
 - ✅ Comprehensive test coverage
 
-**Success Criteria:** 🔄 **PARTIALLY ACHIEVED**
+**Success Criteria:** ✅ **ACHIEVED**
 - ✅ Can process Vision framework output
 - ✅ Correctly sorts elements by position
 - ✅ Detects and resolves duplications
-- ❌ Generates basic markdown output
+- ✅ Generates basic markdown output
 - ✅ Header/footer detection working
 - ✅ LLM optimization toggle implemented
+- ✅ Multi-page PDF processing framework
+- ✅ Cross-page context management
 
-**Current Status**: Phase 2 is approximately 70% complete. The core document processing and duplication detection are fully implemented and tested. The main remaining work is markdown generation.
+**Current Status**: Phase 2 is approximately 85% complete. The core document processing, duplication detection, and markdown generation are fully implemented and tested. The main remaining work is implementing the `convertPDFToImages` method to complete multi-page PDF processing.
 
 ---
 
@@ -373,11 +377,15 @@ struct DocumentElement {
 - Smart merging of split elements
 - Level calculation and nesting
 
-#### `MarkdownGenerator` ❌ NOT STARTED
-- Processes unified element list
-- Generates proper markdown syntax
-- Handles headers and nested lists
-- Maintains document structure
+#### `MarkdownGenerator` ✅ COMPLETED
+- ✅ Processes unified element list
+- ✅ Generates proper markdown syntax
+- ✅ Handles headers and nested lists
+- ✅ Maintains document structure
+- ✅ Generates table of contents with automatic header level calculation
+- ✅ Supports multiple markdown flavors (Standard, GitHub, GitLab, CommonMark)
+- ✅ Position-based header level calculation
+- ✅ Automatic anchor generation for TOC links
 
 ### Configuration Management ✅ COMPLETED
 
@@ -414,7 +422,7 @@ struct DocumentElement {
 - ✅ Mock all external dependencies
 - ✅ Test each component in isolation
 - ✅ Cover edge cases and error conditions
-- ✅ Maintain >90% code coverage (94/94 tests passing)
+- ✅ Maintain >90% code coverage (116/116 tests passing)
 
 #### Integration Testing ❌
 - Test component interactions
@@ -530,9 +538,10 @@ struct DocumentElement {
 ## Next Steps
 
 ### Immediate Priorities (Next 2-3 weeks)
-1. **Complete Phase 2**: Implement `MarkdownGenerator` class
+1. **Complete Phase 2**: Implement `convertPDFToImages` method
 2. **Add Integration Tests**: Test complete document processing pipeline
 3. **Implement Element Merging**: Complete the TODO items in `mergeNearbyElements`
+4. **Test Multi-Page Processing**: Validate end-to-end PDF processing workflow
 
 ### Medium Term (Next 4-6 weeks)
 1. **Complete Phase 3**: Advanced header detection and list processing
@@ -578,7 +587,7 @@ The implementation is progressing well with **Phase 1 (Foundation & Core Infrast
 - ✅ LLM integration framework in place
 
 **Current Focus:**
-The main remaining work in Phase 2 is implementing the `MarkdownGenerator` class to complete the document processing pipeline. Once this is done, the system will be able to process documents end-to-end, from Vision framework input to markdown output.
+The main remaining work in Phase 2 is implementing the `convertPDFToImages` method to complete the multi-page PDF processing pipeline. Once this is done, the system will be able to process multi-page PDFs end-to-end, from PDF input to complete markdown output with table of contents.
 
 **Risk Assessment:**
 - **Low Risk**: Core infrastructure is solid and well-tested

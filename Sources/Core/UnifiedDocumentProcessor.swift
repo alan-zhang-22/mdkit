@@ -113,14 +113,14 @@ public class UnifiedDocumentProcessor {
     
     /// Process a single document page with markdown generation and LLM optimization
     /// - Parameter imageData: Single page image data
-    /// - Parameter outputFileURL: URL where the markdown file will be written
+    /// - Parameter outputStream: OutputStream where the markdown will be written
     /// - Parameter pageNumber: Page number for this document (default: 1)
     /// - Parameter previousPageContext: Context from previous page for cross-page LLM optimization (optional)
     /// - Returns: DocumentProcessingResult with processing summary
     /// - Throws: DocumentProcessingError if processing fails
     public func processDocument(
         _ imageData: Data, 
-        outputFileURL: URL, 
+        outputStream: OutputStream, 
         pageNumber: Int = 1,
         previousPageContext: [DocumentElement] = []
     ) async throws -> DocumentProcessingResult {
@@ -164,8 +164,8 @@ public class UnifiedDocumentProcessor {
             optimizedMarkdown = pageMarkdown
         }
         
-        // Step 8: Write optimized markdown to file
-        try appendMarkdownToFile(optimizedMarkdown, at: outputFileURL, pageNumber: pageNumber)
+        // Step 8: Write optimized markdown to output stream
+        try appendMarkdownToStream(optimizedMarkdown, to: outputStream, pageNumber: pageNumber)
         
         let processingTime = Date().timeIntervalSince(startTime)
         
@@ -179,39 +179,66 @@ public class UnifiedDocumentProcessor {
         )
         
         logger.info("Page \(pageNumber) processing completed in \(String(format: "%.2f", processingTime))s")
-        logger.info("Markdown written to: \(outputFileURL.path)")
+        logger.info("Markdown written to output stream")
         
         return result
     }
     
     // MARK: - File Operations and Cross-Page Optimization
     
-    /// Initialize the output file at the very beginning of processing
-    private func initializeOutputFile(at url: URL) throws {
-        // Create the file with initial header
-        let header = "# Document Processing Results\n\n"
-        try header.write(to: url, atomically: true, encoding: .utf8)
-        logger.info("Output file initialized at: \(url.path)")
-    }
+
     
 
     
-    /// Append markdown content to file with page separator
-    private func appendMarkdownToFile(_ markdown: String, at url: URL, pageNumber: Int) throws {
+    /// Create an output stream for writing to a file
+    private func createOutputStream(for url: URL) throws -> OutputStream {
+        // Create the file if it doesn't exist, or truncate if it does
+        let outputStream = OutputStream(url: url, append: false)
+        guard let outputStream = outputStream else {
+            throw DocumentProcessingError.unsupportedOperation("Failed to create output stream for \(url.path)")
+        }
+        outputStream.open()
+        return outputStream
+    }
+    
+    /// Write initial header to the output stream
+    private func writeHeaderToStream(_ outputStream: OutputStream) throws {
+        let header = "# Document Processing Results\n\n"
+        
+        guard let data = header.data(using: .utf8) else {
+            throw DocumentProcessingError.unsupportedOperation("Failed to convert header to UTF-8 data")
+        }
+        
+        let bytesWritten = data.withUnsafeBytes { buffer in
+            outputStream.write(buffer.bindMemory(to: UInt8.self).baseAddress!, maxLength: buffer.count)
+        }
+        
+        if bytesWritten != data.count {
+            throw DocumentProcessingError.unsupportedOperation("Failed to write complete header to output stream")
+        }
+        
+        logger.info("Initial header written to output stream")
+    }
+    
+    /// Append markdown content to output stream with page separator
+    private func appendMarkdownToStream(_ markdown: String, to outputStream: OutputStream, pageNumber: Int) throws {
         let pageSeparator = "\n\n---\n\n## Page \(pageNumber)\n\n"
         let content = pageSeparator + markdown
         
-        if let fileHandle = try? FileHandle(forWritingTo: url) {
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(content.data(using: .utf8)!)
-            fileHandle.closeFile()
-        } else {
-            // Fallback: read entire file, append, and write back
-            let existingContent = try String(contentsOf: url, encoding: .utf8)
-            let newContent = existingContent + content
-            try newContent.write(to: url, atomically: true, encoding: .utf8)
+        guard let data = content.data(using: .utf8) else {
+            throw DocumentProcessingError.unsupportedOperation("Failed to convert markdown to UTF-8 data")
+        }
+        
+        let bytesWritten = data.withUnsafeBytes { buffer in
+            outputStream.write(buffer.bindMemory(to: UInt8.self).baseAddress!, maxLength: buffer.count)
+        }
+        
+        if bytesWritten != data.count {
+            throw DocumentProcessingError.unsupportedOperation("Failed to write complete markdown content to output stream")
         }
     }
+    
+
     
     /// Extract context elements from the end of a page for cross-page LLM optimization
     private func extractContextForNextPage(from elements: [DocumentElement]) -> [DocumentElement] {
@@ -252,27 +279,59 @@ public class UnifiedDocumentProcessor {
         return fullMarkdown
     }
     
-    /// Generate table of contents and append to file
-    private func generateAndAppendTableOfContents(to url: URL) async throws {
-        logger.info("Generating table of contents")
+    /// Generate table of contents and append to output stream
+    private func generateAndAppendTableOfContents(to outputStream: OutputStream, from elements: [DocumentElement]) async throws {
+        logger.info("Generating table of contents from \(elements.count) elements")
         
-        // TODO: Implement TOC generation from file content
-        // This would read the file, extract headers, and generate TOC
+        // Generate TOC using the same logic as MarkdownGenerator
+        let tocLines = generateTableOfContents(from: elements)
+        let toc = "\n\n---\n\n" + tocLines.joined(separator: "\n")
         
-        let toc = "\n\n---\n\n## Table of Contents\n\n*Generated automatically*\n"
-        
-        if let fileHandle = try? FileHandle(forWritingTo: url) {
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(toc.data(using: .utf8)!)
-            fileHandle.closeFile()
-        } else {
-            // Fallback: read entire file, append, and write back
-            let existingContent = try String(contentsOf: url, encoding: .utf8)
-            let newContent = existingContent + toc
-            try newContent.write(to: url, atomically: true, encoding: .utf8)
+        guard let data = toc.data(using: .utf8) else {
+            throw DocumentProcessingError.unsupportedOperation("Failed to convert TOC to UTF-8 data")
         }
         
-        logger.info("Table of contents appended to file")
+        let bytesWritten = data.withUnsafeBytes { buffer in
+            outputStream.write(buffer.bindMemory(to: UInt8.self).baseAddress!, maxLength: buffer.count)
+        }
+        
+        if bytesWritten != data.count {
+            throw DocumentProcessingError.unsupportedOperation("Failed to write complete TOC to output stream")
+        }
+        
+        logger.info("Table of contents appended to output stream")
+    }
+    
+    /// Generate table of contents from document elements (same logic as MarkdownGenerator)
+    private func generateTableOfContents(from elements: [DocumentElement]) -> [String] {
+        var tocLines = ["## Table of Contents", ""]
+        
+        for element in elements {
+            switch element.type {
+            case .title:
+                let anchor = (element.text ?? "Untitled").lowercased().replacingOccurrences(of: " ", with: "-")
+                tocLines.append("- [\(element.text ?? "Untitled")](#\(anchor))")
+            case .header:
+                let level = calculateHeaderLevel(for: element, in: elements)
+                let indent = String(repeating: "  ", count: level - 1)
+                let anchor = (element.text ?? "Header").lowercased().replacingOccurrences(of: " ", with: "-")
+                tocLines.append("\(indent)- [\(element.text ?? "Header")](#\(anchor))")
+            default: break
+            }
+        }
+        
+        return tocLines
+    }
+    
+    /// Calculate header level based on position and content (same logic as MarkdownGenerator)
+    private func calculateHeaderLevel(for element: DocumentElement, in elements: [DocumentElement]) -> Int {
+        let normalizedY = element.boundingBox.minY
+        if normalizedY < 0.1 { return 1 }
+        else if normalizedY < 0.2 { return 2 }
+        else if normalizedY < 0.3 { return 3 }
+        else if normalizedY < 0.4 { return 4 }
+        else if normalizedY < 0.5 { return 5 }
+        else { return 6 }
     }
     
     // MARK: - PDF Processing
@@ -288,9 +347,6 @@ public class UnifiedDocumentProcessor {
         
         logger.info("Starting PDF processing: \(pdfURL.lastPathComponent)")
         
-        // Initialize the output file at the very beginning
-        try initializeOutputFile(at: outputFileURL)
-        
         // Convert PDF pages to images
         let pageImages = try await convertPDFToImages(pdfURL)
         logger.info("PDF converted to \(pageImages.count) page images")
@@ -298,6 +354,16 @@ public class UnifiedDocumentProcessor {
         var totalDuplicatesRemoved = 0
         var warnings: [String] = []
         var previousPageContext: [DocumentElement] = [] // Keep last few paragraphs for cross-page context
+        var allProcessedElements: [DocumentElement] = [] // Collect all elements for TOC generation
+        
+        // Create output stream and write initial header
+        let outputStream = try createOutputStream(for: outputFileURL)
+        defer {
+            outputStream.close()
+        }
+        
+        // Write initial header through the stream
+        try writeHeaderToStream(outputStream)
         
         // Process each page sequentially using processDocument
         for (pageIndex, pageImageData) in pageImages.enumerated() {
@@ -308,7 +374,7 @@ public class UnifiedDocumentProcessor {
                 // Process this page with cross-page context
                 let pageResult = try await processDocument(
                     pageImageData, 
-                    outputFileURL: outputFileURL, 
+                    outputStream: outputStream, 
                     pageNumber: pageNumber,
                     previousPageContext: previousPageContext
                 )
@@ -318,6 +384,9 @@ public class UnifiedDocumentProcessor {
                 
                 // Extract context for next page
                 previousPageContext = extractContextForNextPage(from: pageResult.elements)
+                
+                // Collect all elements for TOC generation
+                allProcessedElements.append(contentsOf: pageResult.elements)
                 
                 logger.info("PDF page \(pageNumber) completed successfully")
                 
@@ -330,7 +399,8 @@ public class UnifiedDocumentProcessor {
         }
         
         // Final step: Generate and append table of contents
-        try await generateAndAppendTableOfContents(to: outputFileURL)
+        // We need to collect all elements from all pages to generate proper TOC
+        try await generateAndAppendTableOfContents(to: outputStream, from: allProcessedElements)
         
         let processingTime = Date().timeIntervalSince(startTime)
         
