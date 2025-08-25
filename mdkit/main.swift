@@ -183,7 +183,7 @@ struct Config: ParsableCommand {
         )
         
         // Create logger for this command
-        let logger = Logger(label: "mdkit.config")
+        let _ = Logger(label: "mdkit.config")
         
         let configManager = ConfigurationManager()
         
@@ -221,6 +221,11 @@ struct Config: ParsableCommand {
     }
 }
 
+// MARK: - Main Entry Point
+
+// This calls the ArgumentParser entry point
+MDKitCLI.main()
+
 // MARK: - Error Types
 
 enum MDKitError: LocalizedError {
@@ -240,9 +245,4 @@ enum MDKitError: LocalizedError {
     }
 }
 
-// MARK: - Main Entry Point
 
-func main() {
-    // Run the CLI synchronously since ArgumentParser handles the async execution
-    MDKitCLI.main()
-}
