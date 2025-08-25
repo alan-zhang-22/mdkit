@@ -12,6 +12,7 @@ public enum DocumentProcessingError: LocalizedError {
     case processingTimeout
     case unsupportedDocumentType
     case unsupportedPlatform
+    case unsupportedOperation(String)
     
     public var errorDescription: String? {
         switch self {
@@ -27,6 +28,8 @@ public enum DocumentProcessingError: LocalizedError {
             return "Unsupported document type"
         case .unsupportedPlatform:
             return "Document recognition requires macOS 15.0 or newer"
+        case .unsupportedOperation(let operation):
+            return "Unsupported operation: \(operation)"
         }
     }
 }
@@ -95,66 +98,265 @@ public class UnifiedDocumentProcessor {
     internal let config: SimpleProcessingConfig
     private let logger: Logger
     private let overlapDetector: SimpleOverlapDetector
+    private let markdownGenerator: MarkdownGenerator
     
     // MARK: - Initialization
     
-    public init(config: SimpleProcessingConfig, logger: Logger) {
+    public init(config: SimpleProcessingConfig) {
         self.config = config
-        self.logger = logger
-        self.overlapDetector = SimpleOverlapDetector(config: config, logger: logger)
+        self.logger = Logger(label: "UnifiedDocumentProcessor")
+        self.overlapDetector = SimpleOverlapDetector(config: config)
+        self.markdownGenerator = MarkdownGenerator(config: MarkdownGenerationConfig(addTableOfContents: false))
     }
     
     // MARK: - Main Processing Method
     
-    /// Processes a document image using Vision framework's document recognition
-    /// - Parameter imageData: The document image data
-    /// - Returns: DocumentProcessingResult with all extracted elements
+    /// Process a single document page with markdown generation and LLM optimization
+    /// - Parameter imageData: Single page image data
+    /// - Parameter outputFileURL: URL where the markdown file will be written
+    /// - Parameter pageNumber: Page number for this document (default: 1)
+    /// - Parameter previousPageContext: Context from previous page for cross-page LLM optimization (optional)
+    /// - Returns: DocumentProcessingResult with processing summary
     /// - Throws: DocumentProcessingError if processing fails
-    public func processDocument(imageData: Data) async throws -> DocumentProcessingResult {
+    public func processDocument(
+        _ imageData: Data, 
+        outputFileURL: URL, 
+        pageNumber: Int = 1,
+        previousPageContext: [DocumentElement] = []
+    ) async throws -> DocumentProcessingResult {
         let startTime = Date()
         
-        logger.info("Starting document processing")
+        logger.info("Processing document page \(pageNumber)")
         logger.debug("Processing config: overlapThreshold=\(config.overlapThreshold), enableElementMerging=\(config.enableElementMerging)")
         
-
+        // Step 1: Extract elements from this page
+        let pageElements = try await extractDocumentElements(imageData: imageData)
+        logger.debug("Page \(pageNumber): extracted \(pageElements.count) elements")
         
-        // Step 1: Extract document structure using Vision framework
-        let documentElements = try await extractDocumentElements(imageData: imageData)
-        logger.info("Vision framework extracted \(documentElements.count) document elements")
+        // Step 2: Update page numbers for all elements from this page
+        let updatedElements = pageElements.map { element in
+            element.updating(pageNumber: pageNumber)
+        }
         
-        // Step 2: Sort elements by position
-        let sortedElements = sortElementsByPosition(documentElements)
-        logger.debug("Elements sorted by position")
+        // Step 3: Sort elements by position within this page only
+        let sortedElements = sortElementsByPositionWithinPage(updatedElements)
         
-        // Step 3: Detect and remove duplicates
+        // Step 4: Remove duplicates within this page
         let (deduplicatedElements, duplicatesRemoved) = await removeDuplicates(sortedElements)
-        logger.info("Removed \(duplicatesRemoved) duplicate elements")
         
-        // Step 4: Merge nearby elements if enabled
-        let finalElements = config.enableElementMerging ? 
+        // Step 5: Merge nearby elements if enabled
+        let mergedElements = config.enableElementMerging ? 
             await mergeNearbyElements(deduplicatedElements) : 
             deduplicatedElements
         
-        // Step 5: Apply LLM optimization if enabled
-        let optimizedElements = config.enableLLMOptimization ? 
-            try await optimizeMarkdownWithLLM(finalElements) : 
-            finalElements
+        // Step 6: Generate markdown for this page
+        let pageMarkdown = try markdownGenerator.generateMarkdown(from: mergedElements)
+        
+        // Step 7: Apply LLM optimization with cross-page context if enabled
+        let optimizedMarkdown: String
+        if config.enableLLMOptimization {
+            optimizedMarkdown = try await optimizeMarkdownWithLLMCrossPage(
+                currentPageMarkdown: pageMarkdown,
+                previousPageContext: previousPageContext,
+                currentPageElements: mergedElements
+            )
+        } else {
+            optimizedMarkdown = pageMarkdown
+        }
+        
+        // Step 8: Write optimized markdown to file
+        try appendMarkdownToFile(optimizedMarkdown, at: outputFileURL, pageNumber: pageNumber)
         
         let processingTime = Date().timeIntervalSince(startTime)
         
         let result = DocumentProcessingResult(
-            elements: optimizedElements,
+            elements: mergedElements, // Keep elements for this page
             processingTime: processingTime,
-            pageCount: 1, // TODO: Support multi-page documents
-            totalElements: documentElements.count,
+            pageCount: 1,
+            totalElements: pageElements.count,
             duplicatesRemoved: duplicatesRemoved,
             warnings: []
         )
         
-        logger.info("Document processing completed in \(String(format: "%.2f", processingTime))s")
-        logger.info("Final result: \(finalElements.count) elements")
+        logger.info("Page \(pageNumber) processing completed in \(String(format: "%.2f", processingTime))s")
+        logger.info("Markdown written to: \(outputFileURL.path)")
         
         return result
+    }
+    
+    // MARK: - File Operations and Cross-Page Optimization
+    
+    /// Initialize the output file at the very beginning of processing
+    private func initializeOutputFile(at url: URL) throws {
+        // Create the file with initial header
+        let header = "# Document Processing Results\n\n"
+        try header.write(to: url, atomically: true, encoding: .utf8)
+        logger.info("Output file initialized at: \(url.path)")
+    }
+    
+
+    
+    /// Append markdown content to file with page separator
+    private func appendMarkdownToFile(_ markdown: String, at url: URL, pageNumber: Int) throws {
+        let pageSeparator = "\n\n---\n\n## Page \(pageNumber)\n\n"
+        let content = pageSeparator + markdown
+        
+        if let fileHandle = try? FileHandle(forWritingTo: url) {
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(content.data(using: .utf8)!)
+            fileHandle.closeFile()
+        } else {
+            // Fallback: read entire file, append, and write back
+            let existingContent = try String(contentsOf: url, encoding: .utf8)
+            let newContent = existingContent + content
+            try newContent.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+    
+    /// Extract context elements from the end of a page for cross-page LLM optimization
+    private func extractContextForNextPage(from elements: [DocumentElement]) -> [DocumentElement] {
+        // Keep last 2-3 paragraphs for context (configurable)
+        let contextCount = min(3, elements.count)
+        let contextElements = Array(elements.suffix(contextCount))
+        
+        logger.debug("Extracted \(contextElements.count) context elements for next page")
+        return contextElements
+    }
+    
+    /// Optimize markdown with LLM using cross-page context
+    @available(macOS 26.0, *)
+    private func optimizeMarkdownWithLLMCrossPage(
+        currentPageMarkdown: String,
+        previousPageContext: [DocumentElement],
+        currentPageElements: [DocumentElement]
+    ) async throws -> String {
+        logger.info("Applying cross-page LLM optimization")
+        
+        // Build context from previous page
+        let contextMarkdown: String
+        if !previousPageContext.isEmpty {
+            let contextGenerator = MarkdownGenerator(config: MarkdownGenerationConfig(addTableOfContents: false))
+            let contextString = try contextGenerator.generateMarkdown(from: previousPageContext)
+            contextMarkdown = "**Previous Page Context:**\n\(contextString)\n\n**Current Page:**\n"
+        } else {
+            contextMarkdown = ""
+        }
+        
+        // Combine context and current page
+        let fullMarkdown = contextMarkdown + currentPageMarkdown
+        
+        // TODO: Implement actual LLM call with context
+        // For now, return the combined markdown
+        logger.debug("Cross-page optimization would send \(fullMarkdown.count) characters to LLM")
+        
+        return fullMarkdown
+    }
+    
+    /// Generate table of contents and append to file
+    private func generateAndAppendTableOfContents(to url: URL) async throws {
+        logger.info("Generating table of contents")
+        
+        // TODO: Implement TOC generation from file content
+        // This would read the file, extract headers, and generate TOC
+        
+        let toc = "\n\n---\n\n## Table of Contents\n\n*Generated automatically*\n"
+        
+        if let fileHandle = try? FileHandle(forWritingTo: url) {
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(toc.data(using: .utf8)!)
+            fileHandle.closeFile()
+        } else {
+            // Fallback: read entire file, append, and write back
+            let existingContent = try String(contentsOf: url, encoding: .utf8)
+            let newContent = existingContent + toc
+            try newContent.write(to: url, atomically: true, encoding: .utf8)
+        }
+        
+        logger.info("Table of contents appended to file")
+    }
+    
+    // MARK: - PDF Processing
+    
+    /// Process a PDF document by converting pages to images and processing each page sequentially
+    /// - Parameter pdfURL: URL to the PDF document
+    /// - Parameter outputFileURL: URL where the final markdown file will be written
+    /// - Returns: DocumentProcessingResult with processing summary
+    /// - Throws: DocumentProcessingError if processing fails
+    @available(macOS 26.0, *)
+    public func processPDF(_ pdfURL: URL, outputFileURL: URL) async throws -> DocumentProcessingResult {
+        let startTime = Date()
+        
+        logger.info("Starting PDF processing: \(pdfURL.lastPathComponent)")
+        
+        // Initialize the output file at the very beginning
+        try initializeOutputFile(at: outputFileURL)
+        
+        // Convert PDF pages to images
+        let pageImages = try await convertPDFToImages(pdfURL)
+        logger.info("PDF converted to \(pageImages.count) page images")
+        
+        var totalDuplicatesRemoved = 0
+        var warnings: [String] = []
+        var previousPageContext: [DocumentElement] = [] // Keep last few paragraphs for cross-page context
+        
+        // Process each page sequentially using processDocument
+        for (pageIndex, pageImageData) in pageImages.enumerated() {
+            let pageNumber = pageIndex + 1
+            logger.info("Processing PDF page \(pageNumber) of \(pageImages.count)")
+            
+            do {
+                // Process this page with cross-page context
+                let pageResult = try await processDocument(
+                    pageImageData, 
+                    outputFileURL: outputFileURL, 
+                    pageNumber: pageNumber,
+                    previousPageContext: previousPageContext
+                )
+                
+                // Accumulate statistics
+                totalDuplicatesRemoved += pageResult.duplicatesRemoved
+                
+                // Extract context for next page
+                previousPageContext = extractContextForNextPage(from: pageResult.elements)
+                
+                logger.info("PDF page \(pageNumber) completed successfully")
+                
+            } catch {
+                let warning = "PDF page \(pageNumber) failed: \(error.localizedDescription)"
+                logger.warning("\(warning)")
+                warnings.append(warning)
+                // Continue with next page instead of failing completely
+            }
+        }
+        
+        // Final step: Generate and append table of contents
+        try await generateAndAppendTableOfContents(to: outputFileURL)
+        
+        let processingTime = Date().timeIntervalSince(startTime)
+        
+        let result = DocumentProcessingResult(
+            elements: [], // We don't keep all elements in memory
+            processingTime: processingTime,
+            pageCount: pageImages.count,
+            totalElements: 0, // Not applicable since we write to file
+            duplicatesRemoved: totalDuplicatesRemoved,
+            warnings: warnings
+        )
+        
+        logger.info("PDF processing completed in \(String(format: "%.2f", processingTime))s")
+        logger.info("Final markdown written to: \(outputFileURL.path)")
+        
+        return result
+    }
+    
+    /// Convert PDF pages to image data for Vision framework processing
+    @available(macOS 26.0, *)
+    private func convertPDFToImages(_ pdfURL: URL) async throws -> [Data] {
+        // TODO: Implement PDF to image conversion
+        // This would use PDFKit to extract pages and convert to images
+        // For now, we'll throw an error indicating this needs implementation
+        
+        throw DocumentProcessingError.unsupportedOperation("PDF to image conversion not yet implemented")
     }
     
     // MARK: - Vision Framework Integration
@@ -180,6 +382,8 @@ public class UnifiedDocumentProcessor {
         
         return documentElements
     }
+    
+
     
     // MARK: - Document Observation Conversion
     
@@ -435,6 +639,25 @@ public class UnifiedDocumentProcessor {
     
     internal func sortElementsByPosition(_ elements: [DocumentElement]) -> [DocumentElement] {
         return elements.sorted { first, second in
+            // Primary sort: Page number (first page to last page)
+            if first.pageNumber != second.pageNumber {
+                return first.pageNumber < second.pageNumber
+            }
+            
+            // Secondary sort: Y position within page (top to bottom)
+            // Only compare positions within the same page
+            if abs(first.boundingBox.midY - second.boundingBox.midY) > 0.01 {
+                return first.boundingBox.midY < second.boundingBox.midY
+            }
+            
+            // Tertiary sort: X position within page (left to right)
+            return first.boundingBox.midX < second.boundingBox.midX
+        }
+    }
+    
+    /// Sort elements by position within a single page
+    internal func sortElementsByPositionWithinPage(_ elements: [DocumentElement]) -> [DocumentElement] {
+        return elements.sorted { first, second in
             // Primary sort: Y position (top to bottom)
             if abs(first.boundingBox.midY - second.boundingBox.midY) > 0.01 {
                 return first.boundingBox.midY < second.boundingBox.midY
@@ -487,9 +710,9 @@ private class SimpleOverlapDetector {
     private let config: SimpleProcessingConfig
     private let logger: Logger
     
-    init(config: SimpleProcessingConfig, logger: Logger) {
+    init(config: SimpleProcessingConfig) {
         self.config = config
-        self.logger = logger
+        self.logger = Logger(label: "SimpleOverlapDetector")
     }
     
     func removeDuplicates(_ elements: [DocumentElement]) async -> ([DocumentElement], Int) {

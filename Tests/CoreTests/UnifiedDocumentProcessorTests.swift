@@ -7,12 +7,10 @@ import Logging
 final class UnifiedDocumentProcessorTests: XCTestCase {
     
     var processor: UnifiedDocumentProcessor!
-    var mockLogger: Logger!
     var testConfig: SimpleProcessingConfig!
     
     override func setUp() {
         super.setUp()
-        mockLogger = Logger(label: "test")
         testConfig = SimpleProcessingConfig(
             overlapThreshold: 0.1,
             enableElementMerging: true,
@@ -21,12 +19,11 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
             footerRegion: 0.85...1.0,
             enableLLMOptimization: false
         )
-        processor = UnifiedDocumentProcessor(config: testConfig, logger: mockLogger)
+        processor = UnifiedDocumentProcessor(config: testConfig)
     }
     
     override func tearDown() {
         processor = nil
-        mockLogger = nil
         testConfig = nil
         super.tearDown()
     }
@@ -110,7 +107,7 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
             enableLLMOptimization: false
         )
         
-        let headerProcessor = UnifiedDocumentProcessor(config: headerConfig, logger: mockLogger)
+        let headerProcessor = UnifiedDocumentProcessor(config: headerConfig)
         
         // Test that elements in header region are detected as headers
         let headerElement = createMockElement(text: "Regular text", boundingBox: CGRect(x: 0.1, y: 0.05, width: 0.8, height: 0.05))
