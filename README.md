@@ -195,8 +195,7 @@ swift test --verbose
 ## 📚 Documentation
 
 - **[Implementation Plan](docs/implementation-plan.md)**: Detailed development roadmap
-- **[Position-Based Ordering Proposal](docs/position-based-ordering-proposal.md)**: Technical architecture details
-- **[PDF Markdown Solution](docs/pdf-markdown-solution.md)**: Original project requirements
+- **[Complete Implementation Guide](docs/mdkit-complete-implementation-guide.md)**: Comprehensive implementation status, architecture, and roadmap
 
 ## 🤝 Contributing
 
