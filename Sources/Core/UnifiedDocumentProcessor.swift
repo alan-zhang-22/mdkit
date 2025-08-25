@@ -4,6 +4,7 @@ import CoreGraphics
 import Logging
 import PDFKit
 import AppKit
+import CoreImage
 
 // MARK: - Document Processing Error
 
@@ -72,6 +73,8 @@ public struct SimpleProcessingConfig {
     public let headerRegion: ClosedRange<Double>
     public let footerRegion: ClosedRange<Double>
     public let enableLLMOptimization: Bool
+    public let pdfImageScaleFactor: CGFloat
+    public let enableImageEnhancement: Bool
     
     public init(
         overlapThreshold: Double = 0.1,
@@ -79,7 +82,9 @@ public struct SimpleProcessingConfig {
         enableHeaderFooterDetection: Bool = true,
         headerRegion: ClosedRange<Double> = 0.0...0.15,
         footerRegion: ClosedRange<Double> = 0.85...1.0,
-        enableLLMOptimization: Bool = false
+        enableLLMOptimization: Bool = false,
+        pdfImageScaleFactor: CGFloat = 2.0,
+        enableImageEnhancement: Bool = true
     ) {
         self.overlapThreshold = overlapThreshold
         self.enableElementMerging = enableElementMerging
@@ -87,6 +92,8 @@ public struct SimpleProcessingConfig {
         self.headerRegion = headerRegion
         self.footerRegion = footerRegion
         self.enableLLMOptimization = enableLLMOptimization
+        self.pdfImageScaleFactor = pdfImageScaleFactor
+        self.enableImageEnhancement = enableImageEnhancement
     }
 }
 
@@ -397,28 +404,106 @@ public class UnifiedDocumentProcessor {
     
     // MARK: - PDF to Image Conversion
     
-    /// Convert a PDF page to NSImage
+    /// Convert a PDF page to NSImage with high-quality rendering
     /// - Parameter page: PDFPage to convert
     /// - Returns: NSImage representation of the page
     /// - Throws: DocumentProcessingError if conversion fails
     private func convertPDFPageToImage(_ page: PDFPage) throws -> NSImage {
         let pageRect = page.bounds(for: .mediaBox)
         
-        // Create image with appropriate size (maintain aspect ratio)
-        let image = NSImage(size: pageRect.size)
+        // Calculate enhanced size for higher resolution
+        let scaleFactor = config.pdfImageScaleFactor
+        let enhancedSize = CGSize(
+            width: pageRect.width * scaleFactor,
+            height: pageRect.height * scaleFactor
+        )
+        
+        // Create image with enhanced size
+        let image = NSImage(size: enhancedSize)
+        
+        logger.debug("Converting PDF page: original size \(pageRect.size), enhanced size \(enhancedSize) (scale factor: \(scaleFactor))")
         
         image.lockFocus()
         
-        // Set background to white
-        NSColor.white.setFill()
-        NSRect(origin: .zero, size: pageRect.size).fill()
-        
-        // Draw PDF page
-        page.draw(with: .mediaBox, to: NSGraphicsContext.current!.cgContext)
+        if let context = NSGraphicsContext.current?.cgContext {
+            // Set high-quality rendering
+            context.setShouldAntialias(true)
+            context.setShouldSubpixelPositionFonts(true)
+            context.setShouldSubpixelQuantizeFonts(true)
+            
+            // Fill with white background
+            context.setFillColor(NSColor.white.cgColor)
+            context.fill(CGRect(origin: .zero, size: enhancedSize))
+            
+            // Scale the context for higher resolution
+            context.scaleBy(x: scaleFactor, y: scaleFactor)
+            
+            // Draw the PDF page
+            page.draw(with: .mediaBox, to: context)
+        }
         
         image.unlockFocus()
         
-        return image
+        logger.debug("PDF page converted to high-quality image with \(scaleFactor)x resolution")
+        
+        // Enhance image quality for better OCR accuracy
+        let enhancedImage = enhanceImageQuality(image)
+        
+        return enhancedImage
+    }
+    
+    /// Enhances image quality for better OCR accuracy
+    /// - Parameter image: The input image to enhance
+    /// - Returns: Enhanced image with improved quality
+    private func enhanceImageQuality(_ image: NSImage) -> NSImage {
+        // Check if image enhancement is enabled in configuration
+        guard config.enableImageEnhancement else {
+            return image
+        }
+        
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            logger.debug("Could not get CGImage for enhancement, returning original image")
+            return image
+        }
+        
+        let ciImage = CIImage(cgImage: cgImage)
+        
+        // Apply simple, effective enhancement filters
+        var enhancedImage = ciImage
+        
+        // 1. Simple Contrast Enhancement - Improve text visibility without over-processing
+        if let contrastFilter = CIFilter(name: "CIColorControls") {
+            contrastFilter.setValue(enhancedImage, forKey: kCIInputImageKey)
+            contrastFilter.setValue(1.15, forKey: kCIInputContrastKey) // Moderate contrast increase
+            contrastFilter.setValue(0.0, forKey: kCIInputSaturationKey) // Remove color for better OCR
+            contrastFilter.setValue(0.05, forKey: kCIInputBrightnessKey) // Very slight brightness increase
+            
+            if let outputImage = contrastFilter.outputImage {
+                enhancedImage = outputImage
+                logger.debug("Applied contrast enhancement filter")
+            }
+        }
+        
+        // 2. Gentle Sharpening - Enhance text edges without artifacts
+        if let sharpenFilter = CIFilter(name: "CISharpenLuminance") {
+            sharpenFilter.setValue(enhancedImage, forKey: kCIInputImageKey)
+            sharpenFilter.setValue(0.3, forKey: kCIInputSharpnessKey) // Gentle sharpening
+            
+            if let outputImage = sharpenFilter.outputImage {
+                enhancedImage = outputImage
+                logger.debug("Applied sharpening filter")
+            }
+        }
+        
+        // Convert back to NSImage
+        let context = CIContext()
+        guard let outputCGImage = context.createCGImage(enhancedImage, from: enhancedImage.extent) else {
+            logger.warning("Failed to create enhanced image, returning original")
+            return image
+        }
+        
+        logger.debug("Image enhancement completed successfully")
+        return NSImage(cgImage: outputCGImage, size: image.size)
     }
     
     /// Convert NSImage to Data (PNG format)
