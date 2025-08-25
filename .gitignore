@@ -44,7 +44,7 @@ fastlane/test_output
 iOSInjectionProject/
 
 # Third-party dependencies
-third-party/LocalLLMClient/
+# third-party/LocalLLMClient/  # Commented out - now managed as submodule
 
 # Build outputs
 output/

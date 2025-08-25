@@ -1,0 +1,3 @@
+[submodule "third-party/LocalLLMClient"]
+	path = third-party/LocalLLMClient
+	url = https://github.com/tattn/LocalLLMClient.git
