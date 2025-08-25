@@ -1,5 +1,5 @@
 {
-  "originHash" : "db7692afd7b474ae54388bedb86b9c1b86f2ace873a8e6bc0146b7958103c13e",
+  "originHash" : "50bdd344a6f46de22206f0172b07b7d4b5ed255ad417221e0d6c32660b95d11f",
   "pins" : [
     {
       "identity" : "gzipswift",
@@ -56,6 +56,24 @@
       }
     },
     {
+      "identity" : "swift-log",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-log",
+      "state" : {
+        "revision" : "ce592ae52f982c847a4efc0dd881cc9eb32d29f2",
+        "version" : "1.6.4"
+      }
+    },
+    {
+      "identity" : "swift-log-file",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/crspybits/swift-log-file",
+      "state" : {
+        "revision" : "aa94b38bf88c7d9cbc87ceafcdffadaffbc2bffa",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "swift-numerics",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-numerics",
@@ -80,6 +98,15 @@
       "state" : {
         "revision" : "e5bf0627bd134cf8ddc407cda403ae84207af959",
         "version" : "0.1.22"
+      }
+    },
+    {
+      "identity" : "xcglogger",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/DaveWoodCom/XCGLogger.git",
+      "state" : {
+        "revision" : "4def3c1c772ca90ad5e7bfc8ac437c3b0b4276cf",
+        "version" : "7.1.5"
       }
     }
   ],

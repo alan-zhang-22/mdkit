@@ -164,29 +164,32 @@ public class MockDocumentProcessor: DocumentProcessing {
         var markdown = ""
         
         for element in elements {
+            let content = element.text ?? "No text content"
             switch element.type {
             case .title:
-                markdown += "# \(element.content)\n\n"
+                markdown += "# \(content)\n\n"
             case .header:
-                markdown += "## \(element.content)\n\n"
+                markdown += "## \(content)\n\n"
             case .paragraph:
-                markdown += "\(element.content)\n\n"
+                markdown += "\(content)\n\n"
             case .listItem:
-                markdown += "- \(element.content)\n"
+                markdown += "- \(content)\n"
             case .list:
                 markdown += "\n"
             case .table:
-                markdown += "| \(element.content) |\n| --- |\n\n"
+                markdown += "| \(content) |\n| --- |\n\n"
             case .image:
-                markdown += "![\(element.content)]\n\n"
+                markdown += "![\(content)]\n\n"
             case .barcode:
-                markdown += "`\(element.content)`\n\n"
+                markdown += "`\(content)`\n\n"
             case .footnote:
-                markdown += "^[\(element.content)]\n\n"
-            case .caption:
-                markdown += "*\(element.content)*\n\n"
+                markdown += "^[\(content)]\n\n"
+            case .pageNumber:
+                markdown += "*\(content)*\n\n"
             case .textBlock:
-                markdown += "\(element.content)\n\n"
+                markdown += "\(content)\n\n"
+            case .unknown:
+                markdown += "\(content)\n\n"
             }
         }
         
@@ -249,14 +252,14 @@ public class MockDocumentProcessor: DocumentProcessing {
 extension DocumentElement: Hashable {
     public func hash(into hasher: inout Hasher) {
         hasher.combine(type)
-        hasher.combine(content)
+        hasher.combine(text)
         hasher.combine(pageNumber)
         hasher.combine(confidence)
     }
     
     public static func == (lhs: DocumentElement, rhs: DocumentElement) -> Bool {
         return lhs.type == rhs.type &&
-               lhs.content == rhs.content &&
+               lhs.text == rhs.text &&
                lhs.pageNumber == rhs.pageNumber &&
                lhs.confidence == rhs.confidence
     }

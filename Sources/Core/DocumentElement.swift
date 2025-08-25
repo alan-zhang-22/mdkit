@@ -6,115 +6,199 @@
 //
 
 import Foundation
-import Vision
+import CoreGraphics
 
-// MARK: - Document Element Types
-
-public enum ElementType: String, CaseIterable, Codable {
-    case title = "title"
-    case textBlock = "textBlock"
-    case paragraph = "paragraph"
-    case header = "header"
-    case table = "table"
-    case list = "list"
-    case barcode = "barcode"
-    case listItem = "listItem"
-    case unknown = "unknown"
-}
-
-// MARK: - Document Element
-
-public struct DocumentElement: Identifiable, Codable {
-    public let id = UUID()
+/// Represents a single element extracted from a document using Apple's Vision framework
+public struct DocumentElement: Identifiable, Codable, Equatable {
+    /// Unique identifier for this element
+    public let id: UUID
+    
+    /// Type of document element
     public let type: ElementType
+    
+    /// Bounding box in document coordinates
     public let boundingBox: CGRect
-    public let content: String
+    
+    /// Raw content from Vision framework (encoded as Data for Codable conformance)
+    public let contentData: Data
+    
+    /// Confidence score from Vision framework (0.0 to 1.0)
     public let confidence: Float
-    public let pageIndex: Int
+    
+    /// Page number where this element appears (1-indexed)
+    public let pageNumber: Int
+    
+    /// Text content if this is a text-based element
+    public let text: String?
+    
+    /// Additional metadata for the element
+    public let metadata: [String: String]
+    
+    /// Timestamp when this element was processed
+    public let processedAt: Date
     
     public init(
+        id: UUID = UUID(),
         type: ElementType,
         boundingBox: CGRect,
-        content: String,
+        contentData: Data,
         confidence: Float,
-        pageIndex: Int
+        pageNumber: Int,
+        text: String? = nil,
+        metadata: [String: String] = [:],
+        processedAt: Date = Date()
     ) {
+        self.id = id
         self.type = type
         self.boundingBox = boundingBox
-        self.content = content
+        self.contentData = contentData
         self.confidence = confidence
-        self.pageIndex = pageIndex
+        self.pageNumber = pageNumber
+        self.text = text
+        self.metadata = metadata
+        self.processedAt = processedAt
     }
 }
 
-// MARK: - CGRect Extensions for Overlap Detection
+// MARK: - ElementType Enum
 
-extension CGRect {
-    /// Calculates the overlap area between two rectangles
-    public func overlapArea(with other: CGRect) -> CGFloat {
-        let intersection = self.intersection(other)
-        return intersection.width * intersection.height
+/// Types of document elements that can be detected
+public enum ElementType: String, CaseIterable, Codable {
+    /// Document title or main heading
+    case title = "title"
+    
+    /// Text block or paragraph
+    case textBlock = "textBlock"
+    
+    /// Individual paragraph
+    case paragraph = "paragraph"
+    
+    /// Section header or subheading
+    case header = "header"
+    
+    /// Table structure
+    case table = "table"
+    
+    /// List container
+    case list = "list"
+    
+    /// Individual list item
+    case listItem = "listItem"
+    
+    /// Barcode or QR code
+    case barcode = "barcode"
+    
+    /// Image or figure
+    case image = "image"
+    
+    /// Footnote or annotation
+    case footnote = "footnote"
+    
+    /// Page number
+    case pageNumber = "pageNumber"
+    
+    /// Unknown or unclassified element
+    case unknown = "unknown"
+    
+    /// Human-readable description of the element type
+    public var description: String {
+        switch self {
+        case .title: return "Title"
+        case .textBlock: return "Text Block"
+        case .paragraph: return "Paragraph"
+        case .header: return "Header"
+        case .table: return "Table"
+        case .list: return "List"
+        case .listItem: return "List Item"
+        case .barcode: return "Barcode"
+        case .image: return "Image"
+        case .footnote: return "Footnote"
+        case .pageNumber: return "Page Number"
+        case .unknown: return "Unknown"
+        }
     }
     
-    /// Calculates the overlap percentage relative to this rectangle
-    public func overlapPercentage(with other: CGRect) -> CGFloat {
-        let overlap = overlapArea(with: other)
-        let selfArea = width * height
-        return selfArea > 0 ? overlap / selfArea : 0
+    /// Whether this element type contains text content
+    public var isTextBased: Bool {
+        switch self {
+        case .title, .textBlock, .paragraph, .header, .listItem, .footnote, .pageNumber:
+            return true
+        case .table, .list, .barcode, .image, .unknown:
+            return false
+        }
     }
     
-    /// Checks if two rectangles overlap significantly
-    public func overlapsSignificantly(with other: CGRect, threshold: CGFloat = 0.1) -> Bool {
-        return overlapPercentage(with: other) > threshold
-    }
-    
-    /// Calculates the center point of the rectangle
-    public var center: CGPoint {
-        return CGPoint(x: midX, y: midY)
-    }
-    
-    /// Calculates the distance between centers of two rectangles
-    public func distanceToCenter(of other: CGRect) -> CGFloat {
-        let selfCenter = self.center
-        let otherCenter = other.center
-        let dx = selfCenter.x - otherCenter.x
-        let dy = selfCenter.y - otherCenter.y
-        return sqrt(dx * dx + dy * dy)
+    /// Whether this element type can be merged with others of the same type
+    public var isMergeable: Bool {
+        switch self {
+        case .textBlock, .paragraph, .listItem:
+            return true
+        case .title, .header, .table, .list, .barcode, .image, .footnote, .pageNumber, .unknown:
+            return false
+        }
     }
 }
 
-// MARK: - Document Element Extensions
+// MARK: - DocumentElement Extensions
 
 extension DocumentElement {
-    /// Checks if this element overlaps with another element
-    public func overlaps(with other: DocumentElement, threshold: CGFloat = 0.1) -> Bool {
-        return boundingBox.overlapsSignificantly(with: other.boundingBox, threshold: threshold)
+    /// Creates a new element with updated properties
+    public func updating(
+        type: ElementType? = nil,
+        boundingBox: CGRect? = nil,
+        contentData: Data? = nil,
+        confidence: Float? = nil,
+        pageNumber: Int? = nil,
+        text: String? = nil,
+        metadata: [String: String]? = nil
+    ) -> DocumentElement {
+        return DocumentElement(
+            id: self.id,
+            type: type ?? self.type,
+            boundingBox: boundingBox ?? self.boundingBox,
+            contentData: contentData ?? self.contentData,
+            confidence: confidence ?? self.confidence,
+            pageNumber: pageNumber ?? self.pageNumber,
+            text: text ?? self.text,
+            metadata: metadata ?? self.metadata,
+            processedAt: self.processedAt
+        )
     }
     
-    /// Calculates the overlap percentage with another element
-    public func overlapPercentage(with other: DocumentElement) -> CGFloat {
-        return boundingBox.overlapPercentage(with: other.boundingBox)
+    /// Whether this element overlaps with another element
+    public func overlaps(with other: DocumentElement, threshold: Float = 0.1) -> Bool {
+        return boundingBox.overlaps(with: other.boundingBox, threshold: threshold)
     }
     
-    /// Checks if this element is positioned above another element
-    public func isAbove(_ other: DocumentElement) -> Bool {
-        return boundingBox.midY < other.boundingBox.midY
+    /// Distance to another element for merging purposes
+    public func mergeDistance(to other: DocumentElement) -> Float {
+        return boundingBox.mergeDistance(to: other.boundingBox)
     }
     
-    /// Checks if this element is positioned to the left of another element
-    public func isLeftOf(_ other: DocumentElement) -> Bool {
-        return boundingBox.midX < other.boundingBox.midX
+    /// Whether this element can be merged with another
+    public func canMerge(with other: DocumentElement) -> Bool {
+        guard type == other.type && type.isMergeable else { return false }
+        guard pageNumber == other.pageNumber else { return false }
+        return mergeDistance(to: other) <= 50.0 // 50 points threshold
     }
-    
-    /// Sorts elements by reading order (top to bottom, left to right)
-    public static func sortByReadingOrder(_ elements: [DocumentElement]) -> [DocumentElement] {
-        return elements.sorted { first, second in
-            // First by Y position (top to bottom)
-            if abs(first.boundingBox.midY - second.boundingBox.midY) > 10 {
-                return first.boundingBox.midY < second.boundingBox.midY
-            }
-            // Then by X position (left to right)
-            return first.boundingBox.midX < second.boundingBox.midX
+}
+
+// MARK: - Comparable Conformance
+
+extension DocumentElement: Comparable {
+    /// Compare elements by position (top to bottom, left to right)
+    public static func < (lhs: DocumentElement, rhs: DocumentElement) -> Bool {
+        // First by page number
+        if lhs.pageNumber != rhs.pageNumber {
+            return lhs.pageNumber < rhs.pageNumber
         }
+        
+        // Then by Y position (top to bottom)
+        if abs(lhs.boundingBox.minY - rhs.boundingBox.minY) > 5.0 {
+            return lhs.boundingBox.minY < rhs.boundingBox.minY
+        }
+        
+        // Finally by X position (left to right)
+        return lhs.boundingBox.minX < rhs.boundingBox.minX
     }
 }

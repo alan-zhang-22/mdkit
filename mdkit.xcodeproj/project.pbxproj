@@ -7,8 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		E7ED2EFA2E5BC8FE0042F077 /* LocalLLMClient in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2EF92E5BC8FE0042F077 /* LocalLLMClient */; };
-		E7ED2EFC2E5BC8FE0042F077 /* LocalLLMClientLlama in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2EFB2E5BC8FE0042F077 /* LocalLLMClientLlama */; };
+		E7ED2F232E5C14A10042F077 /* MDKitConfiguration in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F222E5C14A10042F077 /* MDKitConfiguration */; };
+		E7ED2F252E5C14A10042F077 /* MDKitCore in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F242E5C14A10042F077 /* MDKitCore */; };
+		E7ED2F272E5C14A10042F077 /* MDKitFileManagement in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F262E5C14A10042F077 /* MDKitFileManagement */; };
+		E7ED2F292E5C14A10042F077 /* MDKitLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F282E5C14A10042F077 /* MDKitLLM */; };
+		E7ED2F2B2E5C14A10042F077 /* MDKitLogging in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F2A2E5C14A10042F077 /* MDKitLogging */; };
+		E7ED2F2E2E5C16490042F077 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F2D2E5C16490042F077 /* ArgumentParser */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -41,8 +45,12 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E7ED2EFA2E5BC8FE0042F077 /* LocalLLMClient in Frameworks */,
-				E7ED2EFC2E5BC8FE0042F077 /* LocalLLMClientLlama in Frameworks */,
+				E7ED2F292E5C14A10042F077 /* MDKitLLM in Frameworks */,
+				E7ED2F232E5C14A10042F077 /* MDKitConfiguration in Frameworks */,
+				E7ED2F272E5C14A10042F077 /* MDKitFileManagement in Frameworks */,
+				E7ED2F252E5C14A10042F077 /* MDKitCore in Frameworks */,
+				E7ED2F2E2E5C16490042F077 /* ArgumentParser in Frameworks */,
+				E7ED2F2B2E5C14A10042F077 /* MDKitLogging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,8 +102,12 @@
 			);
 			name = mdkit;
 			packageProductDependencies = (
-				E7ED2EF92E5BC8FE0042F077 /* LocalLLMClient */,
-				E7ED2EFB2E5BC8FE0042F077 /* LocalLLMClientLlama */,
+				E7ED2F222E5C14A10042F077 /* MDKitConfiguration */,
+				E7ED2F242E5C14A10042F077 /* MDKitCore */,
+				E7ED2F262E5C14A10042F077 /* MDKitFileManagement */,
+				E7ED2F282E5C14A10042F077 /* MDKitLLM */,
+				E7ED2F2A2E5C14A10042F077 /* MDKitLogging */,
+				E7ED2F2D2E5C16490042F077 /* ArgumentParser */,
 			);
 			productName = mdkit;
 			productReference = E7ED2EEE2E5BC89E0042F077 /* mdkit */;
@@ -127,6 +139,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				E7ED2EF82E5BC8FE0042F077 /* XCLocalSwiftPackageReference "third-party/LocalLLMClient" */,
+				E7ED2F212E5C14A10042F077 /* XCLocalSwiftPackageReference "../mdkit" */,
+				E7ED2F2C2E5C16490042F077 /* XCRemoteSwiftPackageReference "swift-argument-parser" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E7ED2EEF2E5BC89E0042F077 /* Products */;
@@ -329,16 +343,48 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "third-party/LocalLLMClient";
 		};
+		E7ED2F212E5C14A10042F077 /* XCLocalSwiftPackageReference "../mdkit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../mdkit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		E7ED2EF92E5BC8FE0042F077 /* LocalLLMClient */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = LocalLLMClient;
+/* Begin XCRemoteSwiftPackageReference section */
+		E7ED2F2C2E5C16490042F077 /* XCRemoteSwiftPackageReference "swift-argument-parser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-argument-parser.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.0;
+			};
 		};
-		E7ED2EFB2E5BC8FE0042F077 /* LocalLLMClientLlama */ = {
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E7ED2F222E5C14A10042F077 /* MDKitConfiguration */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = LocalLLMClientLlama;
+			productName = MDKitConfiguration;
+		};
+		E7ED2F242E5C14A10042F077 /* MDKitCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MDKitCore;
+		};
+		E7ED2F262E5C14A10042F077 /* MDKitFileManagement */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MDKitFileManagement;
+		};
+		E7ED2F282E5C14A10042F077 /* MDKitLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MDKitLLM;
+		};
+		E7ED2F2A2E5C14A10042F077 /* MDKitLogging */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MDKitLogging;
+		};
+		E7ED2F2D2E5C16490042F077 /* ArgumentParser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E7ED2F2C2E5C16490042F077 /* XCRemoteSwiftPackageReference "swift-argument-parser" */;
+			productName = ArgumentParser;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

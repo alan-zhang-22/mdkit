@@ -9,7 +9,12 @@ let package = Package(
         .macOS(.v14) // Compatible with Swift Package Manager 6.0
     ],
     products: [
-        // Library targets only - no executable conflicts
+        // Executable target for command-line usage
+        .executable(
+            name: "mdkit",
+            targets: ["mdkitExecutable"]
+        ),
+        // Library targets for use in other projects
         .library(
             name: "MDKitCore",
             targets: ["mdkitCore"]
@@ -41,9 +46,28 @@ let package = Package(
         // Apple's official logging package
         .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
         // File logging backend for swift-log
-        .package(url: "https://github.com/crspybits/swift-log-file", from: "0.1.0")
+        .package(url: "https://github.com/crspybits/swift-log-file", from: "0.1.0"),
+        // Command-line argument parsing
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0")
     ],
     targets: [
+        // MARK: - Executable Target (CLI application)
+        .executableTarget(
+            name: "mdkitExecutable",
+            dependencies: [
+                "mdkitCore",
+                "mdkitConfiguration",
+                "mdkitFileManagement",
+                "mdkitLogging",
+                "mdkitLLM",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "mdkit",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
+        
         // MARK: - Logging Configuration (depends on swift-log and swift-log-file)
         .target(
             name: "mdkitLogging",
