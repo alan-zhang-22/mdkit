@@ -29,16 +29,28 @@ let package = Package(
         .library(
             name: "MDKitLLM",
             targets: ["mdkitLLM"]
+        ),
+        .library(
+            name: "MDKitProtocols",
+            targets: ["mdkitProtocols"]
         )
     ],
     dependencies: [
         // LocalLLMClient is only used by the mdkitLLM module
-        .package(path: "third-party/LocalLLMClient")
+        .package(path: "third-party/LocalLLMClient"),
+        // Apple's official logging package
+        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
+        // File logging backend for swift-log
+        .package(url: "https://github.com/crspybits/swift-log-file", from: "0.1.0")
     ],
     targets: [
-        // MARK: - Logging (no dependencies)
+        // MARK: - Logging Configuration (depends on swift-log and swift-log-file)
         .target(
             name: "mdkitLogging",
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "FileLogging", package: "swift-log-file")
+            ],
             path: "Sources/Logging"
         ),
         
@@ -84,6 +96,12 @@ let package = Package(
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
             ]
+        ),
+        
+        // MARK: - Protocols (no dependencies)
+        .target(
+            name: "mdkitProtocols",
+            path: "Sources/Protocols"
         ),
         
         // MARK: - Tests

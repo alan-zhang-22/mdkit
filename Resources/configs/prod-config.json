@@ -1,0 +1,400 @@
+{
+  "processing": {
+    "overlapThreshold": 0.1,
+    "enableHeaderFooterDetection": true,
+    "headerRegion": [0.0, 0.15],
+    "footerRegion": [0.85, 1.0],
+    "enableElementMerging": true,
+    "maxMergeDistance": 50.0,
+    "enableLLMOptimization": true
+  },
+  "output": {
+    "outputDirectory": "./output",
+    "filenamePattern": "{filename}.md",
+    "createLogFiles": true,
+    "overwriteExisting": false,
+    "markdown": {
+      "headerLevelOffset": 0,
+      "useATXHeaders": true,
+      "addTableOfContents": true,
+      "preserveFormatting": true,
+      "listMarkerStyle": "dash"
+    }
+  },
+  "llm": {
+    "enabled": true,
+    "backend": "LocalLLMClientLlama",
+    "modelPath": "",
+    "model": {
+      "id": "ggml-org/Meta-Llama-3.1-8B-Instruct-Q4_0-GGUF",
+      "name": "Meta Llama 3.1 8B Instruct Q4_0",
+      "type": "gguf",
+      "downloadUrl": "",
+      "localPath": "~/.localllmclient/huggingface/models/meta-llama-3.1-8b-instruct-q4_0.gguf"
+    },
+    "parameters": {
+      "temperature": 0.1,
+      "topP": 0.9,
+      "topK": 40,
+      "penaltyRepeat": 1.1,
+      "penaltyFrequency": 0.8,
+      "context": 4096,
+      "batch": 512,
+      "threads": 8,
+      "gpuLayers": 0
+    },
+    "options": {
+      "responseFormat": "markdown",
+      "verbose": false,
+      "streaming": true,
+      "jsonMode": false
+    },
+    "contextManagement": {
+      "maxContextLength": 4096,
+      "overlapLength": 200,
+      "chunkSize": 1000,
+      "enableSlidingWindow": true,
+      "enableHierarchicalProcessing": true
+    },
+    "memoryOptimization": {
+      "maxMemoryUsage": "4GB",
+      "enableStreaming": true,
+      "cleanupAfterBatch": true,
+      "enableMemoryMapping": true
+    },
+    "promptTemplates": {
+      "languages": {
+        "zh": {
+          "systemPrompt": [
+            "您是一位专业的文档处理专家，专门负责将中文PDF文档转换为结构良好的markdown格式。",
+            "您的专业领域包括：",
+            "- 中文技术文档和标准规范",
+            "- 中文工程文档和合规要求",
+            "- 中文学术论文和研究文档",
+            "- 中文商业报告和程序手册",
+            "- 技术标准和法规文档",
+            "",
+            "生产环境配置要求：",
+            "1. 保持所有技术准确性和合规要求",
+            "2. 改进文档结构和可读性",
+            "3. 维护一致的格式和层次结构",
+            "4. 确保正确的markdown语法和标准",
+            "5. 优化中文文档的阅读体验",
+            "6. 确保生产环境的稳定性和可靠性",
+            "",
+            "始终以markdown格式回复，并保持原始文档的技术完整性。"
+          ],
+          "markdownOptimizationPrompt": [
+            "生产环境 - 文档信息：",
+            "标题：{documentTitle}",
+            "页数：{pageCount}",
+            "元素数量：{elementCount}",
+            "上下文：{documentContext}",
+            "检测语言：{detectedLanguage}（置信度：{languageConfidence}）",
+            "",
+            "请优化此markdown以实现：",
+            "1. 更好的结构和组织",
+            "2. 改进的可读性和清晰度",
+            "3. 一致的格式和层次结构",
+            "4. 技术准确性保持",
+            "5. 中文文档的本地化优化",
+            "6. 生产环境的质量标准",
+            "",
+            "要优化的Markdown内容：",
+            "{markdown}"
+          ],
+          "structureAnalysisPrompt": [
+            "生产环境 - 文档类型：{documentType}",
+            "总元素数：{elementCount}",
+            "检测语言：{detectedLanguage}",
+            "",
+            "请分析以下文档结构，识别标题、列表、表格和其他元素：",
+            "",
+            "{elementDescriptions}",
+            "",
+            "请按以下格式提供分析：",
+            "- 文档类型：[类型]",
+            "- 结构问题：[问题列表]",
+            "- 改进建议：[建议列表]",
+            "- 置信度：[0.0-1.0]",
+            "- 质量评估：[生产环境质量标准]",
+            "- 语言特定建议：[针对{detectedLanguage}的优化建议]"
+          ],
+          "tableOptimizationPrompt": [
+            "生产环境 - 请优化以下表格结构，提高可读性和markdown格式质量：",
+            "确保正确的对齐和间距，符合生产质量标准：",
+            "",
+            "{tableContent}"
+          ],
+          "listOptimizationPrompt": [
+            "生产环境 - 请优化以下列表结构，改进markdown格式和层次结构：",
+            "保持逻辑结构的同时提高可读性，确保生产质量：",
+            "",
+            "{listContent}"
+          ],
+          "headerOptimizationPrompt": [
+            "生产环境 - 请优化以下标题结构，改进markdown层次结构和一致性：",
+            "确保正确的级别编号和格式，符合生产标准：",
+            "",
+            "{headerContent}"
+          ],
+          "technicalStandardPrompt": [
+            "生产环境 - 这是一份中文技术标准文档。",
+            "请确保所有技术术语、规格和引用都完全保持原样，",
+            "同时改进整体结构和可读性。",
+            "特别注意中文技术术语的准确性和一致性，",
+            "确保符合生产环境的质量标准。"
+          ]
+        },
+        "en": {
+          "systemPrompt": [
+            "You are an expert document processor specializing in converting technical documents to well-structured markdown.",
+            "Your expertise includes:",
+            "- ISO standards and technical specifications",
+            "- Engineering documentation and compliance requirements",
+            "- Academic papers and research documents",
+            "- Business reports and procedural manuals",
+            "",
+            "Production environment requirements:",
+            "1. Preserve all technical accuracy and compliance requirements",
+            "2. Improve document structure and readability",
+            "3. Maintain consistent formatting and hierarchy",
+            "4. Ensure proper markdown syntax and standards",
+            "5. Meet production environment quality standards",
+            "",
+            "Always respond in markdown format and maintain the original document's technical integrity."
+          ],
+          "markdownOptimizationPrompt": [
+            "Production Environment - Document: {documentTitle}",
+            "Pages: {pageCount}",
+            "Elements: {elementCount}",
+            "Context: {documentContext}",
+            "Detected Language: {detectedLanguage} (Confidence: {languageConfidence})",
+            "",
+            "Please optimize this markdown for:",
+            "1. Better structure and organization",
+            "2. Improved readability and clarity",
+            "3. Consistent formatting and hierarchy",
+            "4. Technical accuracy preservation",
+            "5. Production quality standards",
+            "",
+            "Markdown to optimize:",
+            "{markdown}"
+          ]
+        }
+      },
+      "defaultLanguage": "zh",
+      "fallbackLanguage": "en"
+    }
+  },
+  "headerFooterDetection": {
+    "enabled": true,
+    "headerFrequencyThreshold": 0.7,
+    "footerFrequencyThreshold": 0.7,
+    "regionBasedDetection": {
+      "enabled": true,
+      "headerRegionY": 72.0,
+      "footerRegionY": 720.0,
+      "regionTolerance": 5.0
+    },
+    "percentageBasedDetection": {
+      "enabled": true,
+      "headerRegionHeight": 0.15,
+      "footerRegionHeight": 0.15
+    },
+    "smartDetection": {
+      "enabled": true,
+      "excludePageNumbers": true,
+      "excludeCommonHeaders": ["Page", "Chapter", "Section", "页", "章", "节"],
+      "excludeCommonFooters": ["Confidential", "Copyright", "All rights reserved", "机密", "版权", "版权所有"],
+      "enableContentAnalysis": true,
+      "minHeaderFooterLength": 3,
+      "maxHeaderFooterLength": 200
+    },
+    "multiRegionDetection": {
+      "enabled": false,
+      "maxRegions": 2
+    }
+  },
+  "headerDetection": {
+    "enabled": true,
+    "sameLineTolerance": 5.0,
+    "enableHeaderMerging": true,
+    "enableLevelCalculation": true,
+    "markdownLevelOffset": 1,
+    "patterns": {
+      "numberedHeaders": [
+        "^\\d+(?:\\.\\d+)*\\s*$",
+        "^\\d+[A-Z](?:\\.\\d+)*\\s*$",
+        "^第\\d+[章节]\\s*$",
+        "^\\d+[、.．]\\s*$"
+      ],
+      "letteredHeaders": [
+        "^[A-Z](?:\\.\\d+)*\\s*$",
+        "^[A-Z]\\d+(?:\\.\\d+)*\\s*$",
+        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+      ],
+      "romanHeaders": [
+        "^[IVX]+(?:\\.\\d+)*\\s*$",
+        "^[一二三四五六七八九十]+\\s*$"
+      ],
+      "namedHeaders": [
+        "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*\\s*$",
+        "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s*$",
+        "^第\\d+[章节]\\s*$"
+      ]
+    },
+    "levelCalculation": {
+      "autoCalculate": true,
+      "maxLevel": 6,
+      "customLevels": {
+        "Part": 1,
+        "Chapter": 2,
+        "Section": 3,
+        "部分": 1,
+        "章": 2,
+        "节": 3
+      }
+    }
+  },
+  "listDetection": {
+    "enabled": true,
+    "sameLineTolerance": 5.0,
+    "enableListItemMerging": true,
+    "enableLevelCalculation": true,
+    "enableNestedLists": true,
+    "patterns": {
+      "numberedMarkers": [
+        "^\\d+\\)\\s*$",
+        "^\\d+\\.\\s*$",
+        "^\\d+-\\s*$",
+        "^\\d+[、.．]\\s*$"
+      ],
+      "letteredMarkers": [
+        "^[a-z]\\)\\s*$",
+        "^[a-z]\\.\\s*$",
+        "^[a-z]-\\s*$",
+        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+      ],
+      "bulletMarkers": [
+        "^[•\\-\\*]\\s*$",
+        "^[\\u2022\\u2023\\u25E6]\\s*$",
+        "^[·\\u2022]\\s*$"
+      ],
+      "romanMarkers": [
+        "^[ivx]+\\)\\s*$",
+        "^[ivx]+\\.\\s*$",
+        "^[一二三四五六七八九十]+\\s*$"
+      ],
+      "customMarkers": [
+        "^[\\u25A0\\u25A1\\u25A2]\\s*$",
+        "^[\\u25CB\\u25CF]\\s*$"
+      ]
+    },
+    "indentation": {
+      "baseIndentation": 50.0,
+      "levelThreshold": 20.0,
+      "enableXCoordinateAnalysis": true
+    }
+  },
+  "duplicationDetection": {
+    "enabled": true,
+    "overlapThreshold": 0.2,
+    "enableLogging": true,
+    "logOverlaps": true,
+    "strictMode": true
+  },
+  "positionSorting": {
+    "sortBy": "verticalPosition",
+    "tolerance": 5.0,
+    "enableHorizontalSorting": false,
+    "confidenceWeighting": 0.2
+  },
+  "markdownGeneration": {
+    "preservePageBreaks": false,
+    "extractImages": true,
+    "headerFormat": "atx",
+    "listFormat": "unordered",
+    "tableFormat": "standard",
+    "codeBlockFormat": "fenced"
+  },
+  "ocr": {
+    "recognitionLevel": "accurate",
+    "languages": ["zh-CN", "en-US"],
+    "useLanguageCorrection": true,
+    "minimumTextHeight": 0.01,
+    "customWords": ["技术规范", "质量标准", "合规要求", "工程文档", "技术标准", "法规要求"],
+    "enableDocumentAnalysis": true,
+    "preserveLayout": true,
+    "tableDetection": true,
+    "listDetection": true,
+    "barcodeDetection": false
+  },
+  "performance": {
+    "maxMemoryUsage": "4GB",
+    "enableStreaming": true,
+    "batchSize": 10,
+    "cleanupAfterBatch": true,
+    "enableMultiThreading": true,
+    "maxThreads": 8
+  },
+  "fileManagement": {
+    "outputDirectory": "./output",
+    "markdownDirectory": "./markdown",
+    "logDirectory": "./logs",
+    "tempDirectory": "./temp",
+    "createDirectories": true,
+    "overwriteExisting": false,
+    "preserveOriginalNames": true,
+    "fileNamingStrategy": "timestamped"
+  },
+  "logging": {
+    "enabled": true,
+    "level": "info",
+    "outputFolder": "logs",
+    "enableConsoleOutput": true,
+    "logFileRotation": true,
+    "maxLogFileSize": "10MB",
+    "logCategories": {
+      "ocrElements": {
+        "enabled": true,
+        "format": "json",
+        "includeBoundingBoxes": true,
+        "includeConfidence": true
+      },
+      "documentObservation": {
+        "enabled": true,
+        "format": "json",
+        "includePositionData": true,
+        "includeElementTypes": true
+      },
+      "markdownGeneration": {
+        "enabled": true,
+        "format": "markdown",
+        "includeSourceMapping": true,
+        "includeProcessingTime": true
+      },
+      "llmPrompts": {
+        "enabled": false,
+        "format": "json",
+        "includeSystemPrompt": false,
+        "includeUserPrompt": false,
+        "includeLLMResponse": false,
+        "includeTokenCounts": false,
+        "includeProcessingTime": true
+      },
+      "llmOptimizedMarkdown": {
+        "enabled": true,
+        "format": "markdown",
+        "includeOptimizationDetails": false,
+        "includeBeforeAfterComparison": false
+      }
+    },
+    "logFileNaming": {
+      "pattern": "prod_{timestamp}_{document}_{category}.{extension}",
+      "timestampFormat": "yyyyMMdd_HHmmss",
+      "includeDocumentHash": true,
+      "maxFileNameLength": 100
+    }
+  }
+}

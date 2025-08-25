@@ -1,0 +1,262 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MDKit Configuration Schema",
+  "description": "Configuration schema for MDKit PDF to Markdown converter",
+  "type": "object",
+  "properties": {
+    "processing": {
+      "type": "object",
+      "description": "Document processing configuration",
+      "properties": {
+        "overlapThreshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.15,
+          "description": "Overlap threshold for duplicate detection (0.0 to 1.0)"
+        },
+        "enableHeaderFooterDetection": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to enable header/footer detection"
+        },
+        "headerRegion": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [0.0, 0.12],
+          "description": "Header detection region as percentage of page height [min, max]"
+        },
+        "footerRegion": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "default": [0.88, 1.0],
+          "description": "Footer detection region as percentage of page height [min, max]"
+        },
+        "enableElementMerging": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to merge split headers and list items"
+        },
+        "maxMergeDistance": {
+          "type": "number",
+          "minimum": 0.0,
+          "default": 75.0,
+          "description": "Maximum distance for merging elements (in points)"
+        },
+        "enableLLMOptimization": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to use LLM for content optimization"
+        }
+      },
+      "required": ["overlapThreshold", "enableHeaderFooterDetection", "headerRegion", "footerRegion", "enableElementMerging", "maxMergeDistance", "enableLLMOptimization"]
+    },
+    "output": {
+      "type": "object",
+      "description": "Output configuration",
+      "properties": {
+        "outputDirectory": {
+          "type": "string",
+          "default": "./output",
+          "description": "Output directory for generated files"
+        },
+        "filenamePattern": {
+          "type": "string",
+          "default": "{filename}_converted.md",
+          "description": "Output filename pattern with placeholders"
+        },
+        "createLogFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to create log files"
+        },
+        "overwriteExisting": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to overwrite existing files"
+        },
+        "markdown": {
+          "type": "object",
+          "properties": {
+            "headerLevelOffset": {
+              "type": "integer",
+              "default": 0,
+              "description": "Header level offset (adds to all header levels)"
+            },
+            "useATXHeaders": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to use ATX headers (# ## ###)"
+            },
+            "addTableOfContents": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to add table of contents"
+            },
+            "preserveFormatting": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to preserve original formatting"
+            },
+            "listMarkerStyle": {
+              "type": "string",
+              "enum": ["dash", "asterisk", "plus", "number"],
+              "default": "dash",
+              "description": "List marker style"
+            }
+          },
+          "required": ["headerLevelOffset", "useATXHeaders", "addTableOfContents", "preserveFormatting", "listMarkerStyle"]
+        }
+      },
+      "required": ["outputDirectory", "filenamePattern", "createLogFiles", "overwriteExisting", "markdown"]
+    },
+    "llm": {
+      "type": "object",
+      "description": "LLM configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to enable LLM processing"
+        },
+        "model": {
+          "type": "object",
+          "properties": {
+            "identifier": {
+              "type": "string",
+              "default": "llama-2-7b-chat",
+              "description": "Model identifier"
+            },
+            "modelPath": {
+              "type": ["string", "null"],
+              "default": null,
+              "description": "Path to local model file"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["llama", "gemma", "mistral", "custom"],
+              "default": "llama",
+              "description": "Model type"
+            }
+          },
+          "required": ["identifier", "type"]
+        },
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "temperature": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.6,
+              "description": "Temperature for text generation (0.0 to 1.0)"
+            },
+            "topK": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 50,
+              "description": "Top-K sampling parameter"
+            },
+            "topP": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.85,
+              "description": "Top-P sampling parameter (0.0 to 1.0)"
+            },
+            "maxTokens": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 4096,
+              "description": "Maximum output tokens"
+            }
+          },
+          "required": ["temperature", "topK", "topP", "maxTokens"]
+        },
+        "prompts": {
+          "type": "object",
+          "properties": {
+            "systemPrompt": {
+              "type": "string",
+              "default": "You are a helpful assistant that converts PDF content to well-formatted Markdown.",
+              "description": "System prompt for LLM"
+            },
+            "optimizationPrompt": {
+              "type": "string",
+              "default": "Please optimize the following content for Markdown formatting, preserving the structure and meaning while improving readability.",
+              "description": "Content optimization prompt"
+            },
+            "languagePrompt": {
+              "type": "string",
+              "default": "Please detect the language of the following text and respond with just the language code (e.g., 'en', 'es', 'fr').",
+              "description": "Language detection prompt"
+            }
+          },
+          "required": ["systemPrompt", "optimizationPrompt", "languagePrompt"]
+        }
+      },
+      "required": ["enabled", "model", "parameters", "prompts"]
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["debug", "info", "warning", "error", "critical"],
+          "default": "info",
+          "description": "Minimum log level to output"
+        },
+        "enableConsole": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to enable console logging"
+        },
+        "enableFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to enable file logging"
+        },
+        "logFileName": {
+          "type": "string",
+          "default": "mdkit.log",
+          "description": "Base log file name (will create mdkit.log, mdkit.log.1, mdkit.log.2, etc.)"
+        },
+        "logDirectory": {
+          "type": "string",
+          "default": "./logs",
+          "description": "Directory where log files will be stored"
+        },
+        "maxFileSize": {
+          "type": "integer",
+          "minimum": 1024,
+          "default": 1048576,
+          "description": "Maximum size of each log file in bytes (default: 1MB)"
+        },
+        "maxFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5,
+          "description": "Maximum number of log files to keep (includes active and rotated files)"
+        },
+        "includeTimestamps": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to include timestamps in log messages"
+        },
+        "includeLogLevels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to include log levels in log messages"
+        }
+      },
+      "required": ["level", "enableConsole", "enableFile", "logFileName", "logDirectory", "maxFileSize", "maxFiles", "includeTimestamps", "includeLogLevels"]
+    }
+  },
+  "required": ["processing", "output", "llm", "logging"],
+  "additionalProperties": false
+}

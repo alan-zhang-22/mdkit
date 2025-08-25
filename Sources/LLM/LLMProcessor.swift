@@ -9,7 +9,7 @@ import Foundation
 import LocalLLMClient
 import LocalLLMClientLlama
 import mdkitConfiguration
-import mdkitLogging
+import Logging
 
 // MARK: - LLM Processor Protocol
 
