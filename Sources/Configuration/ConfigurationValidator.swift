@@ -122,9 +122,9 @@ public struct ConfigurationValidator {
             throw ConfigurationValidationError.invalidFooterRegion(config.footerRegion)
         }
         
-        // Validate max merge distance
-        if config.maxMergeDistance <= 0.0 {
-            throw ConfigurationValidationError.invalidMaxMergeDistance(config.maxMergeDistance)
+        // Validate merge distance threshold
+        if config.mergeDistanceThreshold <= 0.0 {
+            throw ConfigurationValidationError.invalidMaxMergeDistance(config.mergeDistanceThreshold)
         }
         
         // Validate that header and footer regions don't overlap

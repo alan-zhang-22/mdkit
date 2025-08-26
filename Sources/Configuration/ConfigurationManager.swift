@@ -66,6 +66,70 @@ public class ConfigurationManager: ConfigurationManaging {
         }
     }
     
+    /// Loads configuration from a JSON file in the resources directory
+    /// - Parameter fileName: Name of the JSON file (e.g., "dev-config.json")
+    /// - Returns: Loaded MDKitConfig
+    /// - Throws: ConfigurationError if loading fails
+    public func loadConfigurationFromResources(fileName: String) throws -> MDKitConfig {
+        logger.info("Loading configuration from resources: \(fileName)")
+        
+        // Try to find the file in common resource locations
+        let searchPaths = [
+            "./Resources/configs/\(fileName)",
+            "./configs/\(fileName)",
+            "./\(fileName)",
+            Bundle.main.path(forResource: fileName.replacingOccurrences(of: ".json", with: ""), ofType: "json")
+        ].compactMap { $0 }
+        
+        for path in searchPaths {
+            if FileManager.default.fileExists(atPath: path) {
+                logger.info("Found configuration file at: \(path)")
+                return try loadConfiguration(from: path)
+            }
+        }
+        
+        logger.error("Could not find \(fileName) in any of the search paths")
+        throw ConfigurationError.loadFailed(path: "resources/\(fileName)", underlying: ConfigurationError.fileNotFound("Could not find \(fileName) in any of the search paths"))
+    }
+    
+    /// Loads configuration from a JSON file in the resources directory with fallback
+    /// - Parameter fileName: Name of the JSON file (e.g., "dev-config.json")
+    /// - Returns: Loaded MDKitConfig or default configuration if loading fails
+    public func loadConfigurationFromResourcesWithFallback(fileName: String) -> MDKitConfig {
+        do {
+            return try loadConfigurationFromResources(fileName: fileName)
+        } catch {
+            logger.warning("Failed to load configuration from resources \(fileName), using default configuration: \(error)")
+            return MDKitConfig()
+        }
+    }
+    
+    /// Creates a default configuration with values from dev-config.json if available
+    /// - Returns: MDKitConfig with either loaded values or sensible defaults
+    public func createDefaultConfiguration() -> MDKitConfig {
+        // Try to load from dev-config.json first
+        do {
+            return try loadConfigurationFromResources(fileName: "dev-config.json")
+        } catch {
+            logger.info("Could not load dev-config.json, creating minimal default configuration")
+            return createMinimalDefaultConfiguration()
+        }
+    }
+    
+    /// Creates a minimal default configuration with essential settings
+    /// - Returns: MDKitConfig with minimal but functional defaults
+    private func createMinimalDefaultConfiguration() -> MDKitConfig {
+        return MDKitConfig(
+            processing: ProcessingConfig(),
+            output: OutputConfig(),
+            llm: LLMConfig(),
+            logging: LoggingConfig(),
+            headerFooterDetection: HeaderFooterDetectionConfig(),
+            headerDetection: HeaderDetectionConfig(),
+            listDetection: ListDetectionConfig()
+        )
+    }
+    
     public func saveConfiguration(_ config: MDKitConfig, to path: String) throws {
         let expandedPath = (path as NSString).expandingTildeInPath
         let directory = (expandedPath as NSString).deletingLastPathComponent
@@ -97,7 +161,7 @@ public class ConfigurationManager: ConfigurationManaging {
                 headerRegion: 0.0...0.12,
                 footerRegion: 0.88...1.0,
                 enableElementMerging: true,
-                maxMergeDistance: 75.0,
+                mergeDistanceThreshold: 75.0,
                 enableLLMOptimization: true
             ),
             output: OutputConfig(
@@ -152,16 +216,20 @@ public class ConfigurationManager: ConfigurationManaging {
             errors.append("Processing overlap threshold must be between 0.0 and 1.0")
         }
         
-        if config.processing.maxMergeDistance < 0.0 {
-            errors.append("Processing max merge distance must be non-negative")
+        if config.processing.mergeDistanceThreshold < 0.0 {
+            errors.append("Processing merge distance threshold must be non-negative")
         }
         
-        if config.processing.headerRegion.lowerBound < 0.0 || config.processing.headerRegion.upperBound > 1.0 {
-            errors.append("Processing header region must be between 0.0 and 1.0")
+        if config.processing.headerRegion.count == 2 {
+            if config.processing.headerRegion[0] < 0.0 || config.processing.headerRegion[1] > 1.0 {
+                errors.append("Processing header region must be between 0.0 and 1.0")
+            }
         }
         
-        if config.processing.footerRegion.lowerBound < 0.0 || config.processing.footerRegion.upperBound > 1.0 {
-            errors.append("Processing footer region must be between 0.0 and 1.0")
+        if config.processing.footerRegion.count == 2 {
+            if config.processing.footerRegion[0] < 0.0 || config.processing.footerRegion[1] > 1.0 {
+                errors.append("Processing footer region must be between 0.0 and 1.0")
+            }
         }
         
         // Validate output configuration
@@ -214,6 +282,7 @@ public enum ConfigurationError: LocalizedError {
     case saveFailed(path: String, underlying: Error)
     case validationFailed([String])
     case invalidFormat(Error)
+    case fileNotFound(String)
     
     public var errorDescription: String? {
         switch self {
@@ -225,6 +294,8 @@ public enum ConfigurationError: LocalizedError {
             return "Configuration validation failed:\n" + errors.joined(separator: "\n")
         case .invalidFormat(let underlying):
             return "Invalid configuration format: \(underlying.localizedDescription)"
+        case .fileNotFound(let message):
+            return "File not found: \(message)"
         }
     }
     
@@ -238,6 +309,8 @@ public enum ConfigurationError: LocalizedError {
             return "Configuration values are invalid"
         case .invalidFormat:
             return "Configuration file format is invalid"
+        case .fileNotFound(let message):
+            return "File not found: \(message)"
         }
     }
     
@@ -251,6 +324,8 @@ public enum ConfigurationError: LocalizedError {
             return "Review the configuration values and ensure they are within valid ranges"
         case .invalidFormat:
             return "Ensure the configuration file is valid JSON"
+        case .fileNotFound:
+            return "Ensure the file exists in the expected resource path"
         }
     }
 }

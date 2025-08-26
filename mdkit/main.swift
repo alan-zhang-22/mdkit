@@ -193,7 +193,7 @@ struct Config: ParsableCommand {
             print("=====================")
             print("Processing:")
             print("  - Overlap Threshold: \(config.processing.overlapThreshold)")
-            print("  - Max Merge Distance: \(config.processing.maxMergeDistance)")
+            print("  - Merge Distance Threshold: \(config.processing.mergeDistanceThreshold)")
             print("  - Header Region: \(config.processing.headerRegion)")
             print("  - Footer Region: \(config.processing.footerRegion)")
             print("")

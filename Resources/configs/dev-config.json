@@ -19,7 +19,7 @@
       "useATXHeaders": true,
       "addTableOfContents": true,
       "preserveFormatting": true,
-      "listMarkerStyle": "dash"
+      "listMarkerStyle": "-"
     }
   },
   "llm": {
@@ -27,9 +27,9 @@
     "backend": "LocalLLMClientLlama",
     "modelPath": "",
     "model": {
-      "id": "ggml-org/Meta-Llama-3.1-8B-Instruct-Q4_0-GGUF",
+      "identifier": "ggml-org/Meta-Llama-3.1-8B-Instruct-Q4_0-GGUF",
       "name": "Meta Llama 3.1 8B Instruct Q4_0",
-      "type": "gguf",
+      "type": "llama",
       "downloadUrl": "",
       "localPath": "~/.localllmclient/huggingface/models/meta-llama-3.1-8b-instruct-q4_0.gguf"
     },
@@ -39,7 +39,7 @@
       "topK": 40,
       "penaltyRepeat": 1.1,
       "penaltyFrequency": 0.8,
-      "context": 2048,
+      "maxTokens": 2048,
       "batch": 256,
       "threads": 4,
       "gpuLayers": 0

@@ -30,7 +30,7 @@ final class ConfigurationValidatorTests: XCTestCase {
                 headerRegion: 0.0...0.1,
                 footerRegion: 0.9...1.0,
                 enableElementMerging: true,
-                maxMergeDistance: 25.0,
+                mergeDistanceThreshold: 25.0,
                 enableLLMOptimization: true
             ),
             output: OutputConfig(
@@ -114,7 +114,7 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testInvalidMaxMergeDistance() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(maxMergeDistance: -10.0)
+            processing: ProcessingConfig(mergeDistanceThreshold: -10.0)
         )
         
         XCTAssertThrowsError(try validator.validate(config))
@@ -367,7 +367,7 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testZeroMaxMergeDistance() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(maxMergeDistance: 0.0)
+            processing: ProcessingConfig(mergeDistanceThreshold: 0.0)
         )
         XCTAssertThrowsError(try validator.validate(config))
     }
@@ -397,7 +397,7 @@ final class ConfigurationValidatorTests: XCTestCase {
         let config = MDKitConfig(
             processing: ProcessingConfig(
                 overlapThreshold: 1.5,
-                maxMergeDistance: -10.0
+                mergeDistanceThreshold: -10.0
             ),
             output: OutputConfig(
                 outputDirectory: "",
@@ -422,7 +422,7 @@ final class ConfigurationValidatorTests: XCTestCase {
                 headerRegion: 0.0...0.12,
                 footerRegion: 0.88...1.0,
                 enableElementMerging: true,
-                maxMergeDistance: 30.0,
+                mergeDistanceThreshold: 30.0,
                 enableLLMOptimization: true
             ),
             output: OutputConfig(
