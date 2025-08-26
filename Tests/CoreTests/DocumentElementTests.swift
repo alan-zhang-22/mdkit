@@ -237,14 +237,14 @@ final class DocumentElementTests: XCTestCase {
             pageNumber: 1
         )
         
-        // 20 points gap between elements
+        // 20 points gap between elements (220 - 200 = 20, horizontal gap)
         XCTAssertEqual(element1.mergeDistance(to: element2), 20.0)
     }
     
     func testDocumentElementCanMerge() {
         let element1 = DocumentElement(
             type: .paragraph,
-            boundingBox: CGRect(x: 100, y: 100, width: 100, height: 50),
+            boundingBox: CGRect(x: 0.1, y: 0.1, width: 0.1, height: 0.05),
             contentData: sampleContentData,
             confidence: 0.9,
             pageNumber: 1
@@ -252,7 +252,7 @@ final class DocumentElementTests: XCTestCase {
         
         let element2 = DocumentElement(
             type: .paragraph,
-            boundingBox: CGRect(x: 220, y: 100, width: 100, height: 50),
+            boundingBox: CGRect(x: 0.22, y: 0.1, width: 0.1, height: 0.05),
             contentData: sampleContentData,
             confidence: 0.9,
             pageNumber: 1
@@ -260,27 +260,33 @@ final class DocumentElementTests: XCTestCase {
         
         let element3 = DocumentElement(
             type: .title,
-            boundingBox: CGRect(x: 100, y: 200, width: 100, height: 50),
+            boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.1, height: 0.05),
             contentData: sampleContentData,
             confidence: 0.9,
             pageNumber: 1
         )
         
+        // Create a configuration that works with normalized coordinates
+        let config = SimpleProcessingConfig(
+            mergeDistanceThreshold: 0.15, // 0.15 normalized threshold
+            isMergeDistanceNormalized: true
+        )
+        
         // Same type, same page, within merge distance
-        XCTAssertTrue(element1.canMerge(with: element2))
+        XCTAssertTrue(element1.canMerge(with: element2, config: config))
         
         // Different types cannot merge
-        XCTAssertFalse(element1.canMerge(with: element3))
+        XCTAssertFalse(element1.canMerge(with: element3, config: config))
         
         // Different page numbers cannot merge
         let element4 = DocumentElement(
             type: .paragraph,
-            boundingBox: CGRect(x: 100, y: 100, width: 100, height: 50),
+            boundingBox: CGRect(x: 0.1, y: 0.1, width: 0.1, height: 0.05),
             contentData: sampleContentData,
             confidence: 0.9,
             pageNumber: 2
         )
-        XCTAssertFalse(element1.canMerge(with: element4))
+        XCTAssertFalse(element1.canMerge(with: element4, config: config))
     }
     
     // MARK: - DocumentElement Comparable Tests

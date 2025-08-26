@@ -315,9 +315,9 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
     
     // MARK: - Helper Methods
     
-    private func createMockElement(text: String, boundingBox: CGRect) -> DocumentElement {
+    private func createMockElement(text: String, boundingBox: CGRect, type: mdkitCore.ElementType = .textBlock) -> DocumentElement {
         return DocumentElement(
-            type: mdkitCore.ElementType.unknown,
+            type: type,
             boundingBox: boundingBox,
             contentData: text.data(using: .utf8) ?? Data(),
             confidence: 0.95,
@@ -325,6 +325,11 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
             text: text,
             metadata: [:]
         )
+    }
+    
+    /// Helper method to test canMerge with configuration
+    private func testCanMerge(_ element1: DocumentElement, _ element2: DocumentElement, config: SimpleProcessingConfig? = nil) -> Bool {
+        return element1.canMerge(with: element2, config: config)
     }
     
     // MARK: - Private Method Access for Testing
@@ -436,5 +441,179 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
         
         // Default to paragraph for medium content
         return mdkitCore.ElementType.paragraph
+    }
+    
+    // MARK: - Element Merging Tests
+    
+    func testElementMerging() async {
+        // Create test elements that should be merged
+        let element1 = createMockElement(
+            text: "This is the first part of a sentence",
+            boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let element2 = createMockElement(
+            text: "that continues on the next line.",
+            boundingBox: CGRect(x: 0.1, y: 0.25, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let element3 = createMockElement(
+            text: "This is a separate paragraph.",
+            boundingBox: CGRect(x: 0.1, y: 0.95, width: 0.3, height: 0.05),
+            type: .paragraph
+        )
+        
+        let elements = [element1, element2, element3]
+        
+        // Test that elements can be merged
+        XCTAssertTrue(testCanMerge(element1, element2), "Adjacent text elements should be mergeable")
+        
+        // Test merge distance calculation
+        let distance1to2 = element1.mergeDistance(to: element2)
+        let distance1to3 = element1.mergeDistance(to: element3)
+        
+        XCTAssertLessThan(distance1to2, 0.1, "Close elements should be within merge threshold")
+        XCTAssertGreaterThan(distance1to3, 0.5, "Distant elements should exceed merge threshold")
+        
+        // Test that elements are vertically aligned
+        XCTAssertTrue(element1.boundingBox.isVerticallyAligned(with: element2.boundingBox, tolerance: 15.0),
+                     "Elements should be vertically aligned for merging")
+    }
+    
+    func testElementMergingWithDifferentTypes() async {
+        // Test that only mergeable types can be merged
+        let textElement = createMockElement(
+            text: "Text content",
+            boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let headerElement = createMockElement(
+            text: "Header",
+            boundingBox: CGRect(x: 0.1, y: 0.1, width: 0.3, height: 0.05),
+            type: .header
+        )
+        
+        let listElement = createMockElement(
+            text: "List item",
+            boundingBox: CGRect(x: 0.1, y: 0.3, width: 0.3, height: 0.05),
+            type: .listItem
+        )
+        
+        // Headers should not be mergeable (not in mergeable types)
+        XCTAssertFalse(testCanMerge(headerElement, textElement), "Headers should not be mergeable")
+        
+        // List items should be mergeable with other list items
+        XCTAssertTrue(testCanMerge(listElement, listElement), "List items should be mergeable with same type")
+        
+        // Text blocks should be mergeable with paragraphs
+        let paragraphElement = createMockElement(
+            text: "Paragraph",
+            boundingBox: CGRect(x: 0.1, y: 0.25, width: 0.3, height: 0.05),
+            type: .paragraph
+        )
+        
+        XCTAssertTrue(testCanMerge(textElement, paragraphElement), "Text blocks should be mergeable with paragraphs")
+    }
+    
+    func testElementMergingScoring() async {
+        // Test that closer elements get higher merge scores
+        let element1 = createMockElement(
+            text: "First element",
+            boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let element2 = createMockElement(
+            text: "Second element",
+            boundingBox: CGRect(x: 0.1, y: 0.25, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let element3 = createMockElement(
+            text: "Third element",
+            boundingBox: CGRect(x: 0.1, y: 0.95, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        // Element 2 should be closer to element 1 than element 3
+        let distance1to2 = element1.mergeDistance(to: element2)
+        let distance1to3 = element1.mergeDistance(to: element3)
+        
+        XCTAssertLessThan(distance1to2, distance1to3, "Element 2 should be closer to element 1 than element 3")
+        
+        // Test vertical alignment scoring
+        XCTAssertTrue(element1.boundingBox.isVerticallyAligned(with: element2.boundingBox, tolerance: 15.0),
+                     "Elements 1 and 2 should be vertically aligned")
+        
+        // Check actual distances to understand why elements might be considered aligned
+        let actualDistance1to3 = element1.mergeDistance(to: element3)
+        print("DEBUG: Distance from element1 (y=0.2) to element3 (y=0.8): \(actualDistance1to3)")
+        
+        // Elements 1 and 3 should be far apart
+        XCTAssertGreaterThan(actualDistance1to3, 0.5, "Elements 1 and 3 should be far apart")
+    }
+    
+    func testHybridMergeDistanceThresholds() async {
+        // Create test elements
+        let element1 = createMockElement(
+            text: "First element",
+            boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let element2 = createMockElement(
+            text: "Second element",
+            boundingBox: CGRect(x: 0.1, y: 0.25, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        let element3 = createMockElement(
+            text: "Third element",
+            boundingBox: CGRect(x: 0.1, y: 0.4, width: 0.3, height: 0.05),
+            type: .textBlock
+        )
+        
+        // Test with normalized threshold (default behavior)
+        let normalizedConfig = SimpleProcessingConfig(
+            mergeDistanceThreshold: 0.1,
+            isMergeDistanceNormalized: true
+        )
+        
+        // Element 1 and 2 should be mergeable with normalized threshold
+        XCTAssertTrue(testCanMerge(element1, element2, config: normalizedConfig), 
+                     "Elements should be mergeable with normalized threshold")
+        
+        // Element 1 and 3 should NOT be mergeable with normalized threshold
+        XCTAssertFalse(testCanMerge(element1, element3, config: normalizedConfig), 
+                      "Elements should NOT be mergeable with normalized threshold")
+        
+        // Test with absolute point threshold
+        let absoluteConfig = SimpleProcessingConfig(
+            mergeDistanceThreshold: 50.0, // 50 points
+            isMergeDistanceNormalized: false
+        )
+        
+        // With 50-point threshold, elements 1 and 2 should still be mergeable
+        // (distance is about 0.05 normalized = ~40 points)
+        XCTAssertTrue(testCanMerge(element1, element2, config: absoluteConfig), 
+                     "Elements should be mergeable with 50-point threshold")
+        
+        // With 50-point threshold, elements 1 and 3 should NOT be mergeable
+        // (distance is about 0.15 normalized = ~120 points)
+        XCTAssertFalse(testCanMerge(element1, element3, config: absoluteConfig), 
+                      "Elements should NOT be mergeable with 50-point threshold")
+        
+        // Test with larger absolute threshold
+        let largeAbsoluteConfig = SimpleProcessingConfig(
+            mergeDistanceThreshold: 200.0, // 200 points
+            isMergeDistanceNormalized: false
+        )
+        
+        // With 200-point threshold, elements 1 and 3 should be mergeable
+        XCTAssertTrue(testCanMerge(element1, element3, config: largeAbsoluteConfig), 
+                     "Elements should be mergeable with 200-point threshold")
     }
 }

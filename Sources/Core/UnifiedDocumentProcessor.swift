@@ -76,6 +76,12 @@ public struct SimpleProcessingConfig {
     public let pdfImageScaleFactor: CGFloat
     public let enableImageEnhancement: Bool
     
+    /// Merge distance threshold - can be absolute (points) or normalized (0.0-1.0)
+    public let mergeDistanceThreshold: Float
+    
+    /// Whether merge distance is normalized (true) or absolute points (false)
+    public let isMergeDistanceNormalized: Bool
+    
     public init(
         overlapThreshold: Double = 0.1,
         enableElementMerging: Bool = true,
@@ -84,7 +90,9 @@ public struct SimpleProcessingConfig {
         footerRegion: ClosedRange<Double> = 0.85...1.0,
         enableLLMOptimization: Bool = false,
         pdfImageScaleFactor: CGFloat = 2.0,
-        enableImageEnhancement: Bool = true
+        enableImageEnhancement: Bool = true,
+        mergeDistanceThreshold: Float = 0.02,
+        isMergeDistanceNormalized: Bool = true
     ) {
         self.overlapThreshold = overlapThreshold
         self.enableElementMerging = enableElementMerging
@@ -94,6 +102,8 @@ public struct SimpleProcessingConfig {
         self.enableLLMOptimization = enableLLMOptimization
         self.pdfImageScaleFactor = pdfImageScaleFactor
         self.enableImageEnhancement = enableImageEnhancement
+        self.mergeDistanceThreshold = mergeDistanceThreshold
+        self.isMergeDistanceNormalized = isMergeDistanceNormalized
     }
 }
 
@@ -1002,10 +1012,184 @@ public class UnifiedDocumentProcessor {
     // MARK: - Element Merging
     
     private func mergeNearbyElements(_ elements: [DocumentElement]) async -> [DocumentElement] {
-        // TODO: Implement element merging logic
-        // This will merge nearby text elements that likely belong together
-        logger.debug("Element merging not yet implemented, returning original elements")
-        return elements
+        guard !elements.isEmpty else { return elements }
+        
+        logger.debug("Starting element merging for \(elements.count) elements")
+        
+        // Group elements by page for efficient processing
+        let elementsByPage = Dictionary(grouping: elements) { $0.pageNumber }
+        var mergedElements: [DocumentElement] = []
+        
+        for (pageNumber, pageElements) in elementsByPage.sorted(by: { $0.key < $1.key }) {
+            logger.debug("Processing page \(pageNumber) with \(pageElements.count) elements")
+            
+            // Sort elements within the page by position (top to bottom, left to right)
+            let sortedPageElements = sortElementsByPositionWithinPage(pageElements)
+            
+            // Merge elements on this page
+            let mergedPageElements = await mergeElementsOnPage(sortedPageElements)
+            mergedElements.append(contentsOf: mergedPageElements)
+            
+            logger.debug("Page \(pageNumber): merged \(pageElements.count) elements into \(mergedPageElements.count) elements")
+        }
+        
+        let totalMerged = elements.count - mergedElements.count
+        logger.info("Element merging complete: \(elements.count) → \(mergedElements.count) elements (\(totalMerged) merged)")
+        
+        return mergedElements
+    }
+    
+    /// Merges elements within a single page
+    private func mergeElementsOnPage(_ elements: [DocumentElement]) async -> [DocumentElement] {
+        guard elements.count > 1 else { return elements }
+        
+        var mergedElements: [DocumentElement] = []
+        var processedIndices: Set<Int> = []
+        
+        for i in 0..<elements.count {
+            guard !processedIndices.contains(i) else { continue }
+            
+            let currentElement = elements[i]
+            var bestMergeCandidate: (index: Int, element: DocumentElement)? = nil
+            var bestMergeScore: Float = 0
+            
+            // Look for the best merge candidate
+            for j in (i + 1)..<elements.count {
+                guard !processedIndices.contains(j) else { continue }
+                
+                let candidate = elements[j]
+                
+                // Check if elements can be merged
+                if currentElement.canMerge(with: candidate, config: config) {
+                    let mergeScore = calculateMergeScore(currentElement, candidate)
+                    
+                    if mergeScore > bestMergeScore {
+                        bestMergeScore = mergeScore
+                        bestMergeCandidate = (j, candidate)
+                    }
+                }
+            }
+            
+            if let (mergeIndex, mergeElement) = bestMergeCandidate {
+                // Perform the merge
+                let mergedElement = await mergeElements(currentElement, mergeElement)
+                mergedElements.append(mergedElement)
+                
+                // Mark both elements as processed
+                processedIndices.insert(i)
+                processedIndices.insert(mergeIndex)
+                
+                logger.debug("Merged elements: '\(currentElement.text ?? "nil")' + '\(mergeElement.text ?? "nil")' → '\(mergedElement.text ?? "nil")'")
+            } else {
+                // No merge candidate found, keep the element as-is
+                mergedElements.append(currentElement)
+                processedIndices.insert(i)
+            }
+        }
+        
+        return mergedElements
+    }
+    
+    /// Calculates a score for how well two elements should be merged
+    private func calculateMergeScore(_ first: DocumentElement, _ second: DocumentElement) -> Float {
+        var score: Float = 0
+        
+        // Base score for mergeable types
+        if first.type.isMergeable && second.type.isMergeable {
+            score += 10
+        }
+        
+        // Distance-based scoring (closer elements get higher scores)
+        let distance = first.mergeDistance(to: second)
+        let distanceScore = max(0, 50 - distance) / 50 // Normalize to 0-1 range
+        score += distanceScore * 20
+        
+        // Vertical alignment scoring
+        if first.boundingBox.isVerticallyAligned(with: second.boundingBox, tolerance: 15.0) {
+            score += 15
+        }
+        
+        // Horizontal alignment scoring (for list items)
+        if first.boundingBox.isHorizontallyAligned(with: second.boundingBox, tolerance: 20.0) {
+            score += 10
+        }
+        
+        // Content-based scoring
+        if let firstText = first.text, let secondText = second.text {
+            // Prefer merging elements with similar text characteristics
+            let firstLength = Float(firstText.count)
+            let secondLength = Float(secondText.count)
+            let lengthDiff = abs(firstLength - secondLength)
+            let lengthScore = max(0, 20 - lengthDiff) / 20
+            score += lengthScore * 5
+            
+            // Bonus for elements that look like they're part of the same sentence/paragraph
+            if !firstText.hasSuffix(".") && !firstText.hasSuffix("!") && !firstText.hasSuffix("?") {
+                score += 5
+            }
+        }
+        
+        // Confidence-based scoring
+        let avgConfidence = (first.confidence + second.confidence) / 2
+        score += avgConfidence * 10
+        
+        return score
+    }
+    
+    /// Merges two elements into a single element
+    private func mergeElements(_ first: DocumentElement, _ second: DocumentElement) async -> DocumentElement {
+        // Determine the merged bounding box
+        let mergedBoundingBox = first.boundingBox.union(with: second.boundingBox)
+        
+        // Merge text content
+        let mergedText: String?
+        if let firstText = first.text, let secondText = second.text {
+            // Add space between elements if they're not already separated
+            let needsSpace = !firstText.hasSuffix(" ") && !secondText.hasPrefix(" ")
+            mergedText = needsSpace ? "\(firstText) \(secondText)" : "\(firstText)\(secondText)"
+        } else {
+            mergedText = first.text ?? second.text
+        }
+        
+        // Merge metadata
+        var mergedMetadata = first.metadata
+        for (key, value) in second.metadata {
+            if mergedMetadata[key] == nil {
+                mergedMetadata[key] = value
+            }
+        }
+        
+        // Add merge information to metadata
+        mergedMetadata["merged_from"] = "\(first.id.uuidString),\(second.id.uuidString)"
+        mergedMetadata["merge_timestamp"] = ISO8601DateFormatter().string(from: Date())
+        
+        // Calculate average confidence
+        let mergedConfidence = (first.confidence + second.confidence) / 2
+        
+        // Determine the merged element type
+        let mergedType: ElementType
+        switch (first.type, second.type) {
+        case (.listItem, .listItem):
+            mergedType = .listItem
+        case (.textBlock, .textBlock), (.paragraph, .paragraph):
+            mergedType = .textBlock
+        case (.textBlock, .paragraph), (.paragraph, .textBlock):
+            mergedType = .textBlock
+        default:
+            // Default to the more specific type
+            mergedType = first.type.isMergeable ? first.type : second.type
+        }
+        
+        // Create the merged element
+        return DocumentElement(
+            type: mergedType,
+            boundingBox: mergedBoundingBox,
+            contentData: first.contentData, // Keep first element's content data
+            confidence: mergedConfidence,
+            pageNumber: first.pageNumber,
+            text: mergedText,
+            metadata: mergedMetadata
+        )
     }
     
     // MARK: - LLM Optimization

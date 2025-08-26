@@ -5,7 +5,8 @@
     "headerRegion": [0.0, 0.12],
     "footerRegion": [0.88, 1.0],
     "enableElementMerging": true,
-    "maxMergeDistance": 75.0,
+    "mergeDistanceThreshold": 0.02,
+    "isMergeDistanceNormalized": true,
     "enableLLMOptimization": true
   },
   "output": {

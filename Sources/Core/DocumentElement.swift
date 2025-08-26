@@ -180,10 +180,30 @@ extension DocumentElement {
     }
     
     /// Whether this element can be merged with another
-    public func canMerge(with other: DocumentElement) -> Bool {
-        guard type == other.type && type.isMergeable else { return false }
+    public func canMerge(with other: DocumentElement, config: SimpleProcessingConfig? = nil) -> Bool {
+        // Both elements must be mergeable types
+        guard type.isMergeable && other.type.isMergeable else { return false }
+        
+        // Elements must be on the same page
         guard pageNumber == other.pageNumber else { return false }
-        return mergeDistance(to: other) <= 50.0 // 50 points threshold
+        
+        // Elements must be close enough to merge
+        let distance = mergeDistance(to: other)
+        
+        if let config = config {
+            if config.isMergeDistanceNormalized {
+                return distance <= config.mergeDistanceThreshold
+            } else {
+                // For absolute point thresholds, convert normalized distance to points
+                // Standard PDF page height is 792 points (11 inches at 72 DPI)
+                let documentHeight = 792.0
+                let distanceInPoints = distance * Float(documentHeight)
+                return distanceInPoints <= config.mergeDistanceThreshold
+            }
+        } else {
+            // Default to normalized threshold of 0.02 (2% of document height)
+            return distance <= 0.02
+        }
     }
 }
 
