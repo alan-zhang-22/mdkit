@@ -108,16 +108,9 @@ struct Convert: ParsableCommand {
         }
         
         // Initialize file manager
-        let fileManager = FileManager(config: FileManagementConfig(
-            outputDirectory: URL(fileURLWithPath: outputPath).deletingLastPathComponent().path,
-            markdownDirectory: URL(fileURLWithPath: outputPath).deletingLastPathComponent().path,
-            logDirectory: "~/logs",
-            tempDirectory: "~/temp",
-            createDirectories: true,
-            overwriteExisting: force,
-            preserveOriginalNames: true,
-            fileNamingStrategy: "original"
-        ))
+        let fileManager = MDKitFileManager(
+            config: config.fileManagement
+        )
         
         // TODO: Implement actual PDF processing
         logger.info("PDF processing not yet implemented")
@@ -147,7 +140,10 @@ struct Convert: ParsableCommand {
         - LLM Enabled: \(config.llm.enabled)
         """
         
-        try fileManager.saveMarkdown(placeholderMarkdown, to: outputPath)
+        // Create output stream and write placeholder markdown
+        let outputStream = try fileManager.openOutputStream(for: inputFile, outputType: .markdown, append: true)
+        try fileManager.writeString(placeholderMarkdown, to: outputStream)
+        try fileManager.closeOutputStream(outputStream)
         logger.info("Placeholder markdown file created successfully")
         logger.info("Conversion completed")
         

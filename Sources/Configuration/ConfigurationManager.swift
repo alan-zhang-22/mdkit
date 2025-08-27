@@ -124,7 +124,7 @@ public class ConfigurationManager: ConfigurationManaging {
             output: OutputConfig(),
             llm: LLMConfig(),
             headerFooterDetection: HeaderFooterDetectionConfig(),
-            headerDetection: HeaderDetectionConfig(),
+            headerDetection: HeaderDetectionConfig(markdownLevelOffset: 0),
             listDetection: ListDetectionConfig(),
             duplicationDetection: DuplicationDetectionConfig(),
             positionSorting: PositionSortingConfig(),

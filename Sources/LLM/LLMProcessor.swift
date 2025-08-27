@@ -33,13 +33,12 @@ public class LLMProcessor: LLMProcessing {
     public init(
         config: MDKitConfig,
         client: LLMClient,
-        languageDetector: LanguageDetecting,
-        logger: Logger
+        languageDetector: LanguageDetecting
     ) {
         self.config = config
         self.client = client
         self.languageDetector = languageDetector
-        self.logger = logger
+        self.logger = Logger(label: "mdkit.llmprocessor")
     }
     
     // MARK: - Public Methods
@@ -102,25 +101,26 @@ public class LLMProcessor: LLMProcessing {
     
     // MARK: - Factory Method
     
-    public static func create(config: MDKitConfig, logger: Logger) throws -> LLMProcessor {
+    public static func create(config: MDKitConfig) throws -> LLMProcessor {
+        let logger = Logger(label: "mdkit.llmprocessor.factory")
         logger.info("Creating LLMProcessor with configuration")
         
         // Create LLM client with configuration
-        let client = try createLLMClient(config: config, logger: logger)
-        let languageDetector = createLanguageDetector(config: config, logger: logger)
+        let client = try createLLMClient(config: config)
+        let languageDetector = createLanguageDetector(config: config)
         
         logger.info("LLMProcessor created successfully")
         return LLMProcessor(
             config: config,
             client: client,
-            languageDetector: languageDetector,
-            logger: logger
+            languageDetector: languageDetector
         )
     }
     
     // MARK: - Private Helper Methods
     
-    private static func createLLMClient(config: MDKitConfig, logger: Logger) throws -> LLMClient {
+    private static func createLLMClient(config: MDKitConfig) throws -> LLMClient {
+        let logger = Logger(label: "mdkit.llmprocessor.client")
         logger.debug("Creating LLM client")
         
         // Check if LLM optimization is enabled
@@ -135,7 +135,8 @@ public class LLMProcessor: LLMProcessing {
         return MockLLMClient()
     }
     
-    private static func createLanguageDetector(config: MDKitConfig, logger: Logger) -> LanguageDetecting {
+    private static func createLanguageDetector(config: MDKitConfig) -> LanguageDetecting {
+        let logger = Logger(label: "mdkit.llmprocessor.language")
         logger.debug("Creating language detector")
         
         // Implementation will use Natural Language framework

@@ -86,7 +86,7 @@ final class ConfigurationValidatorTests: XCTestCase {
                 )
             ),
             headerFooterDetection: HeaderFooterDetectionConfig(),
-            headerDetection: HeaderDetectionConfig(),
+            headerDetection: HeaderDetectionConfig(markdownLevelOffset: 0),
             listDetection: ListDetectionConfig(),
             duplicationDetection: DuplicationDetectionConfig(),
             positionSorting: PositionSortingConfig(),
@@ -762,7 +762,7 @@ final class ConfigurationValidatorTests: XCTestCase {
                 )
             ),
             headerFooterDetection: HeaderFooterDetectionConfig(),
-            headerDetection: HeaderDetectionConfig(),
+            headerDetection: HeaderDetectionConfig(markdownLevelOffset: 0),
             listDetection: ListDetectionConfig(),
             duplicationDetection: DuplicationDetectionConfig(),
             positionSorting: PositionSortingConfig(),
