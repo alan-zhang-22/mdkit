@@ -2,6 +2,7 @@ import XCTest
 import CoreGraphics
 import Logging
 @testable import mdkitCore
+@testable import mdkitConfiguration
 
 final class MarkdownGeneratorTests: XCTestCase {
     
@@ -58,12 +59,12 @@ final class MarkdownGeneratorTests: XCTestCase {
     
     func testInitialization() {
         XCTAssertNotNil(markdownGenerator)
-        XCTAssertEqual(markdownGenerator.testConfig.markdownFlavor, .standard)
-        XCTAssertEqual(markdownGenerator.testConfig.indentationSpaces, 2)
-        XCTAssertTrue(markdownGenerator.testConfig.addHorizontalRules)
-        XCTAssertTrue(markdownGenerator.testConfig.preserveOriginalOrder)
-        XCTAssertEqual(markdownGenerator.testConfig.maxHeaderLevel, 6)
-        XCTAssertFalse(markdownGenerator.testConfig.addTableOfContents)
+        XCTAssertEqual(markdownGenerator.testConfig.headerFormat, "atx")
+        XCTAssertEqual(markdownGenerator.testConfig.listFormat, "unordered")
+        XCTAssertEqual(markdownGenerator.testConfig.tableFormat, "standard")
+        XCTAssertEqual(markdownGenerator.testConfig.codeBlockFormat, "fenced")
+        XCTAssertFalse(markdownGenerator.testConfig.preservePageBreaks)
+        XCTAssertTrue(markdownGenerator.testConfig.extractImages)
     }
     
     func testGenerateMarkdownWithEmptyElements() {
@@ -81,7 +82,7 @@ final class MarkdownGeneratorTests: XCTestCase {
         let elements = [createTestElement(type: .title, text: "Simple Title")]
         let markdown = try markdownGenerator.generateMarkdown(from: elements)
         
-        XCTAssertEqual(markdown, "# Simple Title\n---")
+        XCTAssertEqual(markdown, "# Simple Title")
     }
     
     // MARK: - Element Type Tests
@@ -90,14 +91,14 @@ final class MarkdownGeneratorTests: XCTestCase {
         let elements = [createTestElement(type: .title, text: "Document Title")]
         let markdown = try markdownGenerator.generateMarkdown(from: elements)
         
-        XCTAssertEqual(markdown, "# Document Title\n---")
+        XCTAssertEqual(markdown, "# Document Title")
     }
     
     func testHeaderElementGeneration() throws {
         let elements = [createTestElement(type: .header, text: "Section Header")]
         let markdown = try markdownGenerator.generateMarkdown(from: elements)
         
-        XCTAssertEqual(markdown, "# Section Header\n---")
+        XCTAssertEqual(markdown, "# Section Header")
     }
     
     func testParagraphElementGeneration() throws {
@@ -118,7 +119,7 @@ final class MarkdownGeneratorTests: XCTestCase {
         let elements = [createTestElement(type: .table, text: "Table data")]
         let markdown = try markdownGenerator.generateMarkdown(from: elements)
         
-        XCTAssertEqual(markdown, "```\nTable data\n```\n---")
+        XCTAssertEqual(markdown, "```\nTable data\n```")
     }
     
     func testFooterElementGeneration() throws {
@@ -203,7 +204,8 @@ final class MarkdownGeneratorTests: XCTestCase {
         XCTAssertTrue(markdown.contains("# Section 2"))
         XCTAssertTrue(markdown.contains("```\nTable content\n```"))
         XCTAssertTrue(markdown.contains("*Footer text*"))
-        XCTAssertTrue(markdown.contains("---"))
+        // No horizontal rules should be present (feature removed)
+        XCTAssertFalse(markdown.contains("---"))
     }
     
     func testHorizontalRulesGeneration() throws {
@@ -212,45 +214,43 @@ final class MarkdownGeneratorTests: XCTestCase {
         
         let lines = markdown.components(separatedBy: "\n")
         
-        // Should have horizontal rules after title, headers, and table
-        XCTAssertTrue(lines.contains("---"))
+        // Horizontal rules feature has been removed
+        XCTAssertFalse(lines.contains("---"))
         
-        // Count horizontal rules (should be 4: after title, after Section 1, after Section 2, after table)
+        // Count horizontal rules (should be 0 since feature is removed)
         let ruleCount = lines.filter { $0 == "---" }.count
-        XCTAssertEqual(ruleCount, 4)
+        XCTAssertEqual(ruleCount, 0)
     }
     
     // MARK: - Configuration Tests
     
     func testCustomConfiguration() {
         let customConfig = MarkdownGenerationConfig(
-            markdownFlavor: .github,
-            indentationSpaces: 4,
-            addHorizontalRules: false,
-            preserveOriginalOrder: false,
-            maxHeaderLevel: 3,
-            addTableOfContents: true
+            preservePageBreaks: true,
+            extractImages: false,
+            headerFormat: "setext",
+            listFormat: "ordered",
+            tableFormat: "grid",
+            codeBlockFormat: "indented"
         )
         
         let customGenerator = MarkdownGenerator(config: customConfig)
         
-        XCTAssertEqual(customGenerator.testConfig.markdownFlavor, MarkdownFlavor.github)
-        XCTAssertEqual(customGenerator.testConfig.indentationSpaces, 4)
-        XCTAssertFalse(customGenerator.testConfig.addHorizontalRules)
-        XCTAssertFalse(customGenerator.testConfig.preserveOriginalOrder)
-        XCTAssertEqual(customGenerator.testConfig.maxHeaderLevel, 3)
-        XCTAssertTrue(customGenerator.testConfig.addTableOfContents)
+        XCTAssertEqual(customGenerator.testConfig.headerFormat, "setext")
+        XCTAssertEqual(customGenerator.testConfig.listFormat, "ordered")
+        XCTAssertEqual(customGenerator.testConfig.tableFormat, "grid")
+        XCTAssertEqual(customGenerator.testConfig.codeBlockFormat, "indented")
+        XCTAssertTrue(customGenerator.testConfig.preservePageBreaks)
+        XCTAssertFalse(customGenerator.testConfig.extractImages)
     }
     
     func testTableOfContentsGeneration() throws {
-        let configWithTOC = MarkdownGenerationConfig(addTableOfContents: true)
-        let generatorWithTOC = MarkdownGenerator(config: configWithTOC)
-        
+        // Note: Table of contents generation is no longer configurable
+        // This test is kept for compatibility but the feature is not implemented
         let elements = createTestElements()
-        let markdown = try generatorWithTOC.generateMarkdown(from: elements)
+        let markdown = try markdownGenerator.generateMarkdown(from: elements)
         
-        // Check that TOC is generated
-        XCTAssertTrue(markdown.contains("## Table of Contents"))
+        // Check that basic markdown is generated
         XCTAssertTrue(markdown.contains("Document Title"))
         XCTAssertTrue(markdown.contains("Section 1"))
         XCTAssertTrue(markdown.contains("Section 2"))

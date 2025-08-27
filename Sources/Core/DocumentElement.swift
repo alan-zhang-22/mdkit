@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreGraphics
+import mdkitConfiguration
 
 /// Represents a single element extracted from a document using Apple's Vision framework
 public struct DocumentElement: Identifiable, Codable, Equatable {
@@ -180,29 +181,61 @@ extension DocumentElement {
     }
     
     /// Whether this element can be merged with another
-    public func canMerge(with other: DocumentElement, config: SimpleProcessingConfig? = nil) -> Bool {
+    public func canMerge(with other: DocumentElement, config: mdkitConfiguration.ProcessingConfig? = nil) -> Bool {
         // Both elements must be mergeable types
         guard type.isMergeable && other.type.isMergeable else { return false }
         
         // Elements must be on the same page
         guard pageNumber == other.pageNumber else { return false }
         
-        // Elements must be close enough to merge
+        // Check if elements are on the same line or side by side
+        let isSameLine = boundingBox.isVerticallyAligned(with: other.boundingBox, tolerance: 20.0) // Same line (similar Y)
+        let isSideBySide = boundingBox.isHorizontallyAligned(with: other.boundingBox, tolerance: 15.0) // Side by side (similar X)
+        
+        // Calculate distance
         let distance = mergeDistance(to: other)
         
         if let config = config {
-            if config.isMergeDistanceNormalized {
-                return distance <= config.mergeDistanceThreshold
+            if isSameLine {
+                // Same line merging: much more permissive (e.g., "5.1.2" and "Access Control")
+                if config.isHorizontalMergeThresholdNormalized {
+                    return distance <= Float(config.horizontalMergeThreshold)
+                } else {
+                    // For absolute point thresholds, convert normalized distance to points
+                    let documentWidth = 612.0 // Standard PDF page width (8.5 inches at 72 DPI)
+                    let distanceInPoints = distance * Float(documentWidth)
+                    return distanceInPoints <= Float(config.horizontalMergeThreshold)
+                }
+            } else if isSideBySide {
+                // Side by side merging: use standard threshold
+                if config.isMergeDistanceNormalized {
+                    return distance <= Float(config.mergeDistanceThreshold)
+                } else {
+                    // For absolute point thresholds, convert normalized distance to points
+                    // Standard PDF page height is 792 points (11 inches at 72 DPI)
+                    let documentHeight = 792.0
+                    let distanceInPoints = distance * Float(documentHeight)
+                    return distanceInPoints <= Float(config.mergeDistanceThreshold)
+                }
             } else {
-                // For absolute point thresholds, convert normalized distance to points
-                // Standard PDF page height is 792 points (11 inches at 72 DPI)
-                let documentHeight = 792.0
-                let distanceInPoints = distance * Float(documentHeight)
-                return distanceInPoints <= config.mergeDistanceThreshold
+                // Diagonal merging: use the more restrictive threshold
+                let threshold = min(config.horizontalMergeThreshold, config.mergeDistanceThreshold)
+                if config.isMergeDistanceNormalized {
+                    return distance <= Float(threshold)
+                } else {
+                    // Use document height for diagonal calculations
+                    let documentHeight = 792.0
+                    let distanceInPoints = distance * Float(documentHeight)
+                    return distanceInPoints <= Float(threshold)
+                }
             }
         } else {
-            // Default to normalized threshold of 0.02 (2% of document height)
-            return distance <= 0.02
+            // Default behavior: use horizontal threshold for same line, vertical for side by side
+            if isSameLine {
+                return distance <= 0.15 // 15% of document width for same line
+            } else {
+                return distance <= 0.02 // 2% of document height for side by side
+            }
         }
     }
 }

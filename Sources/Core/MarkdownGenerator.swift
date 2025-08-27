@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import Logging
+import mdkitConfiguration
 
 // MARK: - Markdown Generation Error
 
@@ -26,63 +27,11 @@ public enum MarkdownGenerationError: LocalizedError {
 
 // MARK: - Markdown Generation Configuration
 
-public struct MarkdownGenerationConfig {
-    /// Markdown flavor/style to generate
-    public let markdownFlavor: MarkdownFlavor
-    
-    /// Number of spaces for indentation
-    public let indentationSpaces: Int
-    
-    /// Whether to add horizontal rules between sections
-    public let addHorizontalRules: Bool
-    
-    /// Whether to preserve original element order strictly
-    public let preserveOriginalOrder: Bool
-    
-    /// Maximum header level to generate (1-6)
-    public let maxHeaderLevel: Int
-    
-    /// Whether to add table of contents
-    public let addTableOfContents: Bool
-    
-    public init(
-        markdownFlavor: MarkdownFlavor = .standard,
-        indentationSpaces: Int = 2,
-        addHorizontalRules: Bool = true,
-        preserveOriginalOrder: Bool = true,
-        maxHeaderLevel: Int = 6,
-        addTableOfContents: Bool = false
-    ) {
-        self.markdownFlavor = markdownFlavor
-        self.indentationSpaces = indentationSpaces
-        self.addHorizontalRules = addHorizontalRules
-        self.preserveOriginalOrder = preserveOriginalOrder
-        self.maxHeaderLevel = max(1, min(6, maxHeaderLevel))
-        self.addTableOfContents = addTableOfContents
-    }
-}
+// Using the unified MarkdownGenerationConfig from mdkitConfiguration
+public typealias MarkdownGenerationConfig = mdkitConfiguration.MarkdownGenerationConfig
 
-// MARK: - Markdown Flavor
-
-public enum MarkdownFlavor: String, CaseIterable {
-    case standard = "standard"
-    case github = "github"
-    case gitlab = "gitlab"
-    case commonmark = "commonmark"
-    
-    public var description: String {
-        switch self {
-        case .standard:
-            return "Standard Markdown"
-        case .github:
-            return "GitHub Flavored Markdown"
-        case .gitlab:
-            return "GitLab Flavored Markdown"
-        case .commonmark:
-            return "CommonMark"
-        }
-    }
-}
+// MARK: - Markdown Flavor (Deprecated)
+// This enum is no longer used with the unified configuration system
 
 // MARK: - Markdown Generator
 
@@ -118,23 +67,12 @@ public class MarkdownGenerator {
         
         var markdownLines: [String] = []
         
-        // Add table of contents if enabled
-        if config.addTableOfContents {
-            markdownLines.append(contentsOf: generateTableOfContents(from: elements))
-            markdownLines.append("") // Empty line after TOC
-        }
-        
         // Process each element
         for (index, element) in elements.enumerated() {
             let elementMarkdown = try generateMarkdownForElement(element, at: index, in: elements)
             
             if !elementMarkdown.isEmpty {
                 markdownLines.append(elementMarkdown)
-                
-                // Add horizontal rules between major sections if enabled
-                if config.addHorizontalRules && shouldAddHorizontalRule(after: element, at: index, in: elements) {
-                    markdownLines.append("---")
-                }
                 
                 // Add spacing between elements
                 if index < elements.count - 1 {
@@ -285,38 +223,7 @@ public class MarkdownGenerator {
         }
     }
     
-    /// Determine if a horizontal rule should be added after an element
-    private func shouldAddHorizontalRule(after element: DocumentElement, at index: Int, in elements: [DocumentElement]) -> Bool {
-        // Add rules after major section breaks
-        switch element.type {
-        case .title, .header:
-            return true
-        case .table:
-            return true
-        default:
-            return false
-        }
-    }
-    
-    /// Generate table of contents from document elements
-    private func generateTableOfContents(from elements: [DocumentElement]) -> [String] {
-        var tocLines = ["## Table of Contents", ""]
-        
-        for element in elements {
-            switch element.type {
-            case .title:
-                tocLines.append("- [\(element.text ?? "Untitled")](#\(element.text?.lowercased().replacingOccurrences(of: " ", with: "-") ?? "untitled"))")
-            case .header:
-                let level = calculateHeaderLevel(for: element, in: elements)
-                let indent = String(repeating: "  ", count: level - 1)
-                tocLines.append("\(indent)- [\(element.text ?? "Header")](#\(element.text?.lowercased().replacingOccurrences(of: " ", with: "-") ?? "header"))")
-            default:
-                break
-            }
-        }
-        
-        return tocLines
-    }
+
 }
 
 

@@ -116,7 +116,7 @@ struct Convert: ParsableCommand {
             createDirectories: true,
             overwriteExisting: force,
             preserveOriginalNames: true,
-            fileNamingStrategy: .original
+            fileNamingStrategy: "original"
         ))
         
         // TODO: Implement actual PDF processing

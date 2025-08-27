@@ -5,6 +5,7 @@ import Logging
 import PDFKit
 import AppKit
 import CoreImage
+import mdkitConfiguration
 
 // MARK: - Document Processing Error
 
@@ -64,49 +65,6 @@ public struct DocumentProcessingResult {
     }
 }
 
-// MARK: - Simple Processing Configuration
-
-public struct SimpleProcessingConfig {
-    public let overlapThreshold: Double
-    public let enableElementMerging: Bool
-    public let enableHeaderFooterDetection: Bool
-    public let headerRegion: ClosedRange<Double>
-    public let footerRegion: ClosedRange<Double>
-    public let enableLLMOptimization: Bool
-    public let pdfImageScaleFactor: CGFloat
-    public let enableImageEnhancement: Bool
-    
-    /// Merge distance threshold - can be absolute (points) or normalized (0.0-1.0)
-    public let mergeDistanceThreshold: Float
-    
-    /// Whether merge distance is normalized (true) or absolute points (false)
-    public let isMergeDistanceNormalized: Bool
-    
-    public init(
-        overlapThreshold: Double = 0.1,
-        enableElementMerging: Bool = true,
-        enableHeaderFooterDetection: Bool = true,
-        headerRegion: ClosedRange<Double> = 0.0...0.15,
-        footerRegion: ClosedRange<Double> = 0.85...1.0,
-        enableLLMOptimization: Bool = false,
-        pdfImageScaleFactor: CGFloat = 2.0,
-        enableImageEnhancement: Bool = true,
-        mergeDistanceThreshold: Float = 0.02,
-        isMergeDistanceNormalized: Bool = true
-    ) {
-        self.overlapThreshold = overlapThreshold
-        self.enableElementMerging = enableElementMerging
-        self.enableHeaderFooterDetection = enableHeaderFooterDetection
-        self.headerRegion = headerRegion
-        self.footerRegion = footerRegion
-        self.enableLLMOptimization = enableLLMOptimization
-        self.pdfImageScaleFactor = pdfImageScaleFactor
-        self.enableImageEnhancement = enableImageEnhancement
-        self.mergeDistanceThreshold = mergeDistanceThreshold
-        self.isMergeDistanceNormalized = isMergeDistanceNormalized
-    }
-}
-
 // MARK: - Unified Document Processor
 
 @available(macOS 26.0, *)
@@ -114,18 +72,18 @@ public class UnifiedDocumentProcessor {
     
     // MARK: - Properties
     
-    internal let config: SimpleProcessingConfig
+    internal let config: MDKitConfig
     private let logger: Logger
     private let overlapDetector: SimpleOverlapDetector
     private let markdownGenerator: MarkdownGenerator
     
     // MARK: - Initialization
     
-    public init(config: SimpleProcessingConfig) {
+    public init(config: MDKitConfig) {
         self.config = config
         self.logger = Logger(label: "UnifiedDocumentProcessor")
         self.overlapDetector = SimpleOverlapDetector(config: config)
-        self.markdownGenerator = MarkdownGenerator(config: MarkdownGenerationConfig(addTableOfContents: false))
+        self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
     }
     
     // MARK: - Main Processing Method
@@ -146,7 +104,7 @@ public class UnifiedDocumentProcessor {
         let startTime = Date()
         
         logger.info("Processing document page \(pageNumber)")
-        logger.debug("Processing config: overlapThreshold=\(config.overlapThreshold), enableElementMerging=\(config.enableElementMerging)")
+        logger.debug("Processing config: overlapThreshold=\(config.processing.overlapThreshold), enableElementMerging=\(config.processing.enableElementMerging)")
         
         // Step 1: Extract elements from this page
         let pageElements = try await extractDocumentElements(imageData: imageData)
@@ -164,7 +122,7 @@ public class UnifiedDocumentProcessor {
         let (deduplicatedElements, duplicatesRemoved) = await removeDuplicates(sortedElements)
         
         // Step 5: Merge nearby elements if enabled
-        let mergedElements = config.enableElementMerging ? 
+        let mergedElements = config.processing.enableElementMerging ? 
             await mergeNearbyElements(deduplicatedElements) : 
             deduplicatedElements
         
@@ -173,7 +131,7 @@ public class UnifiedDocumentProcessor {
         
         // Step 7: Apply LLM optimization with cross-page context if enabled
         let optimizedMarkdown: String
-        if config.enableLLMOptimization {
+        if config.processing.enableLLMOptimization {
             optimizedMarkdown = try await optimizeMarkdownWithLLMCrossPage(
                 currentPageMarkdown: pageMarkdown,
                 previousPageContext: previousPageContext,
@@ -281,7 +239,7 @@ public class UnifiedDocumentProcessor {
         // Build context from previous page
         let contextMarkdown: String
         if !previousPageContext.isEmpty {
-            let contextGenerator = MarkdownGenerator(config: MarkdownGenerationConfig(addTableOfContents: false))
+            let contextGenerator = MarkdownGenerator(config: config.markdownGeneration)
             let contextString = try contextGenerator.generateMarkdown(from: previousPageContext)
             contextMarkdown = "**Previous Page Context:**\n\(contextString)\n\n**Current Page:**\n"
         } else {
@@ -422,7 +380,7 @@ public class UnifiedDocumentProcessor {
         let pageRect = page.bounds(for: .mediaBox)
         
         // Calculate enhanced size for higher resolution
-        let scaleFactor = config.pdfImageScaleFactor
+        let scaleFactor = config.processing.pdfImageScaleFactor
         let enhancedSize = CGSize(
             width: pageRect.width * scaleFactor,
             height: pageRect.height * scaleFactor
@@ -467,7 +425,7 @@ public class UnifiedDocumentProcessor {
     /// - Returns: Enhanced image with improved quality
     private func enhanceImageQuality(_ image: NSImage) -> NSImage {
         // Check if image enhancement is enabled in configuration
-        guard config.enableImageEnhancement else {
+        guard config.processing.enableImageEnhancement else {
             return image
         }
         
@@ -861,7 +819,7 @@ public class UnifiedDocumentProcessor {
         originalType: ElementType
     ) -> ElementType {
         // Check if header/footer detection is enabled
-        guard config.enableHeaderFooterDetection else {
+        guard config.processing.enableHeaderFooterDetection else {
             return originalType
         }
         
@@ -870,13 +828,13 @@ public class UnifiedDocumentProcessor {
         let normalizedY = boundingBox.minY
         
         // Check if element is in header region (top of page)
-        if config.headerRegion.contains(normalizedY) {
+        if config.processing.headerRegion.contains(normalizedY) {
             logger.debug("Element detected as header at Y position \(normalizedY)")
             return .header
         }
         
         // Check if element is in footer region (bottom of page)
-        if config.footerRegion.contains(normalizedY) {
+        if config.processing.footerRegion.contains(normalizedY) {
             logger.debug("Element detected as footer at Y position \(normalizedY)")
             return .footer
         }
@@ -1060,7 +1018,7 @@ public class UnifiedDocumentProcessor {
                 let candidate = elements[j]
                 
                 // Check if elements can be merged
-                if currentElement.canMerge(with: candidate, config: config) {
+                if currentElement.canMerge(with: candidate, config: config.processing) {
                     let mergeScore = calculateMergeScore(currentElement, candidate)
                     
                     if mergeScore > bestMergeScore {
@@ -1099,19 +1057,45 @@ public class UnifiedDocumentProcessor {
             score += 10
         }
         
+        // Check alignment type
+        let isSameLine = first.boundingBox.isVerticallyAligned(with: second.boundingBox, tolerance: 20.0) // Same line (similar Y)
+        let isSideBySide = first.boundingBox.isHorizontallyAligned(with: second.boundingBox, tolerance: 15.0) // Side by side (similar X)
+        
         // Distance-based scoring (closer elements get higher scores)
         let distance = first.mergeDistance(to: second)
-        let distanceScore = max(0, 50 - distance) / 50 // Normalize to 0-1 range
-        score += distanceScore * 20
         
-        // Vertical alignment scoring
-        if first.boundingBox.isVerticallyAligned(with: second.boundingBox, tolerance: 15.0) {
+        if isSameLine {
+            // Same line merging: much more permissive scoring
+            let distanceScore = max(0, 100 - distance) / 100 // Normalize to 0-1 range
+            score += distanceScore * 30 // Higher weight for same line merging
+            
+            // Bonus for header-like patterns (e.g., "5.1.2" + "Access Control")
+            if let firstText = first.text, let secondText = second.text {
+                let firstIsHeaderMarker = firstText.range(of: #"^\d+\.?\d*\.?\d*$"#, options: .regularExpression) != nil
+                let secondIsHeaderText = secondText.count > 3 && !secondText.hasPrefix(".")
+                
+                if firstIsHeaderMarker && secondIsHeaderText {
+                    score += 25 // Significant bonus for header marker + text combinations
+                }
+            }
+        } else if isSideBySide {
+            // Side by side merging: standard scoring
+            let distanceScore = max(0, 50 - distance) / 50 // Normalize to 0-1 range
+            score += distanceScore * 20
+        } else {
+            // Diagonal merging: reduced scoring
+            let distanceScore = max(0, 50 - distance) / 50
+            score += distanceScore * 15
+        }
+        
+        // Vertical alignment scoring (same line)
+        if isSameLine {
             score += 15
         }
         
-        // Horizontal alignment scoring (for list items)
-        if first.boundingBox.isHorizontallyAligned(with: second.boundingBox, tolerance: 20.0) {
-            score += 10
+        // Horizontal alignment scoring (side by side)
+        if isSideBySide {
+            score += 20 // Higher score for side by side alignment
         }
         
         // Content-based scoring
@@ -1144,9 +1128,25 @@ public class UnifiedDocumentProcessor {
         // Merge text content
         let mergedText: String?
         if let firstText = first.text, let secondText = second.text {
-            // Add space between elements if they're not already separated
-            let needsSpace = !firstText.hasSuffix(" ") && !secondText.hasPrefix(" ")
-            mergedText = needsSpace ? "\(firstText) \(secondText)" : "\(firstText)\(secondText)"
+            // Check if elements are horizontally aligned (same line)
+            let isSameLine = first.boundingBox.isVerticallyAligned(with: second.boundingBox, tolerance: 20.0)
+            
+            if isSameLine {
+                // Same line merging: preserve spacing based on actual distance
+                let horizontalGap = first.boundingBox.horizontalGap(to: second.boundingBox)
+                let needsSpace = horizontalGap > 5.0 // If gap is more than 5 points, add space
+                
+                if needsSpace {
+                    mergedText = "\(firstText) \(secondText)"
+                } else {
+                    // Elements are very close, merge without extra space
+                    mergedText = "\(firstText)\(secondText)"
+                }
+            } else {
+                // Vertical or diagonal merging: add space if not already separated
+                let needsSpace = !firstText.hasSuffix(" ") && !secondText.hasPrefix(" ")
+                mergedText = needsSpace ? "\(firstText) \(secondText)" : "\(firstText)\(secondText)"
+            }
         } else {
             mergedText = first.text ?? second.text
         }
@@ -1215,10 +1215,10 @@ public class UnifiedDocumentProcessor {
 // MARK: - Simple Overlap Detector
 
 private class SimpleOverlapDetector {
-    private let config: SimpleProcessingConfig
+    private let config: MDKitConfig
     private let logger: Logger
     
-    init(config: SimpleProcessingConfig) {
+    init(config: MDKitConfig) {
         self.config = config
         self.logger = Logger(label: "SimpleOverlapDetector")
     }
@@ -1229,7 +1229,7 @@ private class SimpleOverlapDetector {
         
         for element in elements {
             let isDuplicate = uniqueElements.contains { existing in
-                element.overlaps(with: existing, threshold: Float(config.overlapThreshold))
+                element.overlaps(with: existing, threshold: Float(config.processing.overlapThreshold))
             }
             
             if isDuplicate {

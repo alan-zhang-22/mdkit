@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import mdkitConfiguration
 
 // MARK: - File Manager Protocol
 
@@ -67,43 +68,8 @@ public class FileManager: FileManaging {
 
 // MARK: - Supporting Types
 
-public struct FileManagementConfig {
-    public let outputDirectory: String
-    public let markdownDirectory: String
-    public let logDirectory: String
-    public let tempDirectory: String
-    public let createDirectories: Bool
-    public let overwriteExisting: Bool
-    public let preserveOriginalNames: Bool
-    public let fileNamingStrategy: FileNamingStrategy
-    
-    public init(
-        outputDirectory: String,
-        markdownDirectory: String,
-        logDirectory: String,
-        tempDirectory: String,
-        createDirectories: Bool,
-        overwriteExisting: Bool,
-        preserveOriginalNames: Bool,
-        fileNamingStrategy: FileNamingStrategy
-    ) {
-        self.outputDirectory = outputDirectory
-        self.markdownDirectory = markdownDirectory
-        self.logDirectory = logDirectory
-        self.tempDirectory = tempDirectory
-        self.createDirectories = createDirectories
-        self.overwriteExisting = overwriteExisting
-        self.preserveOriginalNames = preserveOriginalNames
-        self.fileNamingStrategy = fileNamingStrategy
-    }
-    
-    public enum FileNamingStrategy: String, Codable {
-        case timestamped = "timestamped"
-        case original = "original"
-        case hash = "hash"
-        case custom = "custom"
-    }
-}
+// Using the unified FileManagementConfig from mdkitConfiguration
+public typealias FileManagementConfig = mdkitConfiguration.FileManagementConfig
 
 public struct OutputPaths {
     public let markdown: String

@@ -7,7 +7,11 @@
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.02,
     "isMergeDistanceNormalized": true,
-    "enableLLMOptimization": true
+    "horizontalMergeThreshold": 0.15,
+    "isHorizontalMergeThresholdNormalized": true,
+    "enableLLMOptimization": true,
+    "pdfImageScaleFactor": 2.0,
+    "enableImageEnhancement": true
   },
   "output": {
     "outputDirectory": "./dev-output",

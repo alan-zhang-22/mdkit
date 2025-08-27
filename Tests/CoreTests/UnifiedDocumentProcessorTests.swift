@@ -3,21 +3,28 @@ import Vision
 import CoreGraphics
 import Logging
 @testable import mdkitCore
+@testable import mdkitConfiguration
 
 final class UnifiedDocumentProcessorTests: XCTestCase {
     
     var processor: UnifiedDocumentProcessor!
-    var testConfig: SimpleProcessingConfig!
+    var testConfig: MDKitConfig!
     
     override func setUp() {
         super.setUp()
-        testConfig = SimpleProcessingConfig(
-            overlapThreshold: 0.1,
-            enableElementMerging: true,
-            enableHeaderFooterDetection: true,
-            headerRegion: 0.0...0.15,
-            footerRegion: 0.85...1.0,
-            enableLLMOptimization: false
+        testConfig = MDKitConfig(
+            processing: ProcessingConfig(
+                overlapThreshold: 0.1,
+                enableHeaderFooterDetection: true,
+                headerRegion: [0.0, 0.15],
+                footerRegion: [0.85, 1.0],
+                enableElementMerging: true,
+                mergeDistanceThreshold: 0.02,
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true,
+                enableLLMOptimization: false
+            )
         )
         processor = UnifiedDocumentProcessor(config: testConfig)
     }
@@ -32,79 +39,105 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
     
     func testInitialization() {
         XCTAssertNotNil(processor)
-        XCTAssertEqual(processor.config.overlapThreshold, testConfig.overlapThreshold)
-        XCTAssertEqual(processor.config.enableElementMerging, testConfig.enableElementMerging)
-        XCTAssertEqual(processor.config.enableHeaderFooterDetection, testConfig.enableHeaderFooterDetection)
-        XCTAssertEqual(processor.config.headerRegion, testConfig.headerRegion)
-        XCTAssertEqual(processor.config.footerRegion, testConfig.footerRegion)
-        XCTAssertEqual(processor.config.enableLLMOptimization, testConfig.enableLLMOptimization)
+        XCTAssertEqual(processor.config.processing.overlapThreshold, testConfig.processing.overlapThreshold)
+        XCTAssertEqual(processor.config.processing.enableElementMerging, testConfig.processing.enableElementMerging)
+        XCTAssertEqual(processor.config.processing.enableHeaderFooterDetection, testConfig.processing.enableHeaderFooterDetection)
+        XCTAssertEqual(processor.config.processing.headerRegion, testConfig.processing.headerRegion)
+        XCTAssertEqual(processor.config.processing.footerRegion, testConfig.processing.footerRegion)
+        XCTAssertEqual(processor.config.processing.enableLLMOptimization, testConfig.processing.enableLLMOptimization)
     }
     
     // MARK: - Configuration Tests
     
     func testHeaderFooterDetectionConfiguration() {
         // Test with header/footer detection enabled
-        let configWithDetection = SimpleProcessingConfig(
-            overlapThreshold: 0.1,
-            enableElementMerging: true,
-            enableHeaderFooterDetection: true,
-            headerRegion: 0.0...0.1,
-            footerRegion: 0.9...1.0,
-            enableLLMOptimization: false
+        let configWithDetection = MDKitConfig(
+            processing: ProcessingConfig(
+                overlapThreshold: 0.1,
+                enableHeaderFooterDetection: true,
+                headerRegion: [0.0, 0.1],
+                footerRegion: [0.9, 1.0],
+                enableElementMerging: true,
+                mergeDistanceThreshold: 0.02,
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true,
+                enableLLMOptimization: false
+            )
         )
         
-        XCTAssertTrue(configWithDetection.enableHeaderFooterDetection)
-        XCTAssertEqual(configWithDetection.headerRegion, 0.0...0.1)
-        XCTAssertEqual(configWithDetection.footerRegion, 0.9...1.0)
+        XCTAssertTrue(configWithDetection.processing.enableHeaderFooterDetection)
+        XCTAssertEqual(configWithDetection.processing.headerRegion, [0.0, 0.1])
+        XCTAssertEqual(configWithDetection.processing.footerRegion, [0.9, 1.0])
         
         // Test with header/footer detection disabled
-        let configWithoutDetection = SimpleProcessingConfig(
-            overlapThreshold: 0.1,
-            enableElementMerging: true,
-            enableHeaderFooterDetection: false,
-            headerRegion: 0.0...0.15,
-            footerRegion: 0.85...1.0,
-            enableLLMOptimization: false
+        let configWithoutDetection = MDKitConfig(
+            processing: ProcessingConfig(
+                overlapThreshold: 0.1,
+                enableHeaderFooterDetection: false,
+                headerRegion: [0.0, 0.15],
+                footerRegion: [0.85, 1.0],
+                enableElementMerging: true,
+                mergeDistanceThreshold: 0.02,
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true,
+                enableLLMOptimization: false
+            )
         )
         
-        XCTAssertFalse(configWithoutDetection.enableHeaderFooterDetection)
+        XCTAssertFalse(configWithoutDetection.processing.enableHeaderFooterDetection)
     }
     
     func testLLMOptimizationConfiguration() {
         // Test with LLM optimization enabled
-        let configWithLLM = SimpleProcessingConfig(
-            overlapThreshold: 0.1,
-            enableElementMerging: true,
-            enableHeaderFooterDetection: true,
-            headerRegion: 0.0...0.15,
-            footerRegion: 0.85...1.0,
-            enableLLMOptimization: true
+        let configWithLLM = MDKitConfig(
+            processing: ProcessingConfig(
+                overlapThreshold: 0.1,
+                enableHeaderFooterDetection: true,
+                headerRegion: [0.0, 0.15],
+                footerRegion: [0.85, 1.0],
+                enableElementMerging: true,
+                mergeDistanceThreshold: 0.02,
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true,
+                enableLLMOptimization: true
+            )
         )
         
-        XCTAssertTrue(configWithLLM.enableLLMOptimization)
+        XCTAssertTrue(configWithLLM.processing.enableLLMOptimization)
         
         // Test with LLM optimization disabled
-        let configWithoutLLM = SimpleProcessingConfig(
-            overlapThreshold: 0.1,
-            enableElementMerging: true,
-            enableHeaderFooterDetection: true,
-            headerRegion: 0.0...0.15,
-            footerRegion: 0.85...1.0,
-            enableLLMOptimization: false
+        let configWithoutLLM = MDKitConfig(
+            processing: ProcessingConfig(
+                overlapThreshold: 0.1,
+                enableHeaderFooterDetection: true,
+                headerRegion: [0.0, 0.15],
+                footerRegion: [0.85, 1.0],
+                enableElementMerging: true,
+                mergeDistanceThreshold: 0.02,
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true,
+                enableLLMOptimization: false
+            )
         )
         
-        XCTAssertFalse(configWithoutLLM.enableLLMOptimization)
+        XCTAssertFalse(configWithoutLLM.processing.enableLLMOptimization)
     }
     
     func testHeaderFooterDetectionLogic() {
         // Test header detection
-        let headerConfig = SimpleProcessingConfig(
-            overlapThreshold: 0.1,
-            enableElementMerging: true,
-            enableHeaderFooterDetection: true,
-            headerRegion: 0.0...0.1,  // Top 10%
-            footerRegion: 0.9...1.0,  // Bottom 10%
-            enableLLMOptimization: false
+        let headerConfig = MDKitConfig(
+            processing: ProcessingConfig(
+                overlapThreshold: 0.1,
+                enableHeaderFooterDetection: true,
+                headerRegion: [0.0, 0.1],  // Top 10%
+                footerRegion: [0.9, 1.0],  // Bottom 10%
+                enableElementMerging: true,
+                enableLLMOptimization: false
+            )
         )
         
         let headerProcessor = UnifiedDocumentProcessor(config: headerConfig)
@@ -114,9 +147,9 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
         // Note: This test would need access to the private determineElementType method
         // For now, we'll test the configuration is properly applied
         
-        XCTAssertTrue(headerConfig.enableHeaderFooterDetection)
-        XCTAssertEqual(headerConfig.headerRegion, 0.0...0.1)
-        XCTAssertEqual(headerConfig.footerRegion, 0.9...1.0)
+        XCTAssertTrue(headerConfig.processing.enableHeaderFooterDetection)
+        XCTAssertEqual(headerConfig.processing.headerRegion, [0.0, 0.1])
+        XCTAssertEqual(headerConfig.processing.footerRegion, [0.9, 1.0])
     }
     
     // MARK: - Element Type Detection Tests
@@ -328,8 +361,8 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
     }
     
     /// Helper method to test canMerge with configuration
-    private func testCanMerge(_ element1: DocumentElement, _ element2: DocumentElement, config: SimpleProcessingConfig? = nil) -> Bool {
-        return element1.canMerge(with: element2, config: config)
+    private func testCanMerge(_ element1: DocumentElement, _ element2: DocumentElement, config: MDKitConfig? = nil) -> Bool {
+        return element1.canMerge(with: element2, config: config?.processing)
     }
     
     // MARK: - Private Method Access for Testing
@@ -577,9 +610,13 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
         )
         
         // Test with normalized threshold (default behavior)
-        let normalizedConfig = SimpleProcessingConfig(
-            mergeDistanceThreshold: 0.1,
-            isMergeDistanceNormalized: true
+        let normalizedConfig = MDKitConfig(
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: 0.1,
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         
         // Element 1 and 2 should be mergeable with normalized threshold
@@ -591,9 +628,13 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
                       "Elements should NOT be mergeable with normalized threshold")
         
         // Test with absolute point threshold
-        let absoluteConfig = SimpleProcessingConfig(
-            mergeDistanceThreshold: 50.0, // 50 points
-            isMergeDistanceNormalized: false
+        let absoluteConfig = MDKitConfig(
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: 50.0, // 50 points
+                isMergeDistanceNormalized: false,
+                horizontalMergeThreshold: 100.0, // 100 points for horizontal
+                isHorizontalMergeThresholdNormalized: false
+            )
         )
         
         // With 50-point threshold, elements 1 and 2 should still be mergeable
@@ -607,9 +648,13 @@ final class UnifiedDocumentProcessorTests: XCTestCase {
                       "Elements should NOT be mergeable with 50-point threshold")
         
         // Test with larger absolute threshold
-        let largeAbsoluteConfig = SimpleProcessingConfig(
-            mergeDistanceThreshold: 200.0, // 200 points
-            isMergeDistanceNormalized: false
+        let largeAbsoluteConfig = MDKitConfig(
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: 200.0, // 200 points
+                isMergeDistanceNormalized: false,
+                horizontalMergeThreshold: 300.0, // 300 points for horizontal
+                isHorizontalMergeThresholdNormalized: false
+            )
         )
         
         // With 200-point threshold, elements 1 and 3 should be mergeable

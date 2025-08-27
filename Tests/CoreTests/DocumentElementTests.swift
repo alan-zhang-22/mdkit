@@ -8,6 +8,7 @@
 import XCTest
 import CoreGraphics
 @testable import mdkitCore
+@testable import mdkitConfiguration
 
 final class DocumentElementTests: XCTestCase {
     
@@ -267,16 +268,20 @@ final class DocumentElementTests: XCTestCase {
         )
         
         // Create a configuration that works with normalized coordinates
-        let config = SimpleProcessingConfig(
-            mergeDistanceThreshold: 0.15, // 0.15 normalized threshold
-            isMergeDistanceNormalized: true
+        let config = MDKitConfig(
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: 0.15, // 0.15 normalized threshold
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.20, // 0.20 normalized threshold for horizontal
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         
         // Same type, same page, within merge distance
-        XCTAssertTrue(element1.canMerge(with: element2, config: config))
+        XCTAssertTrue(element1.canMerge(with: element2, config: config.processing))
         
         // Different types cannot merge
-        XCTAssertFalse(element1.canMerge(with: element3, config: config))
+        XCTAssertFalse(element1.canMerge(with: element3, config: config.processing))
         
         // Different page numbers cannot merge
         let element4 = DocumentElement(
@@ -286,7 +291,62 @@ final class DocumentElementTests: XCTestCase {
             confidence: 0.9,
             pageNumber: 2
         )
-        XCTAssertFalse(element1.canMerge(with: element4, config: config))
+        XCTAssertFalse(element1.canMerge(with: element4, config: config.processing))
+    }
+    
+    // MARK: - Horizontal vs Vertical Merging Tests
+    
+    func testHorizontalMergingWithDirectionalThresholds() {
+        // Create elements that are on the same line
+        let element1 = DocumentElement(
+            type: .textBlock,
+            boundingBox: CGRect(x: 0.1, y: 0.2, width: 0.2, height: 0.05),
+            contentData: sampleContentData,
+            confidence: 0.9,
+            pageNumber: 1,
+            text: "5.1.2"
+        )
+        
+        let element2 = DocumentElement(
+            type: .textBlock,
+            boundingBox: CGRect(x: 0.4, y: 0.2, width: 0.4, height: 0.05),
+            contentData: sampleContentData,
+            confidence: 0.9,
+            pageNumber: 1,
+            text: "Access Control"
+        )
+        
+        // Create a configuration with different horizontal vs vertical thresholds
+        let config = MDKitConfig(
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: 0.02, // 2% for vertical
+                isMergeDistanceNormalized: true,
+                horizontalMergeThreshold: 0.15, // 15% for horizontal
+                isHorizontalMergeThresholdNormalized: true
+            )
+        )
+        
+        // Elements should be on the same line (tolerance 0.05 = 5% of document height)
+        XCTAssertTrue(element1.boundingBox.isVerticallyAligned(with: element2.boundingBox, tolerance: 0.05))
+        
+        // Elements should be mergeable due to same line threshold being more permissive
+        XCTAssertTrue(element1.canMerge(with: element2, config: config.processing))
+        
+        // Test with elements on different lines
+        let element3 = DocumentElement(
+            type: .textBlock,
+            boundingBox: CGRect(x: 0.1, y: 0.5, width: 0.2, height: 0.05), // Much further down
+            contentData: sampleContentData,
+            confidence: 0.9,
+            pageNumber: 1,
+            text: "Different line"
+        )
+        
+        // Elements should NOT be on the same line with realistic tolerance (0.05 = 5%)
+        XCTAssertFalse(element1.boundingBox.isVerticallyAligned(with: element3.boundingBox, tolerance: 0.05))
+        
+        // Elements should NOT be mergeable due to different line threshold being more restrictive
+        XCTAssertFalse(element1.canMerge(with: element3, config: config.processing))
     }
     
     // MARK: - DocumentElement Comparable Tests

@@ -32,6 +32,8 @@ final class ConfigurationValidatorTests: XCTestCase {
                 enableElementMerging: true,
                 mergeDistanceThreshold: 25.0,
                 isMergeDistanceNormalized: false,
+                horizontalMergeThreshold: 50.0,
+                isHorizontalMergeThresholdNormalized: false,
                 enableLLMOptimization: true
             ),
             output: OutputConfig(
@@ -111,7 +113,11 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testInvalidOverlapThreshold() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(overlapThreshold: 1.5)
+            processing: ProcessingConfig(
+                overlapThreshold: 1.5,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         
         XCTAssertThrowsError(try validator.validate(config)) { error in
@@ -124,7 +130,11 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testInvalidHeaderRegion() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(headerRegion: [-0.1, 0.2])
+            processing: ProcessingConfig(
+                headerRegion: [-0.1, 0.2],
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         
         XCTAssertThrowsError(try validator.validate(config))
@@ -132,7 +142,11 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testInvalidFooterRegion() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(footerRegion: [0.8, 1.1])
+            processing: ProcessingConfig(
+                footerRegion: [0.8, 1.1],
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         
         XCTAssertThrowsError(try validator.validate(config))
@@ -140,7 +154,11 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testInvalidMaxMergeDistance() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(mergeDistanceThreshold: -10.0)
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: -10.0,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         
         XCTAssertThrowsError(try validator.validate(config))
@@ -150,7 +168,9 @@ final class ConfigurationValidatorTests: XCTestCase {
         let config = MDKitConfig(
             processing: ProcessingConfig(
                 headerRegion: [0.0, 0.2],
-                footerRegion: [0.15, 1.0]
+                footerRegion: [0.15, 1.0],
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
             )
         )
         
@@ -195,7 +215,11 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testLLMDisabledWithOptimizationEnabled() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(enableLLMOptimization: true),
+            processing: ProcessingConfig(
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true,
+                enableLLMOptimization: true
+            ),
             llm: LLMConfig(enabled: false)
         )
         
@@ -592,21 +616,33 @@ final class ConfigurationValidatorTests: XCTestCase {
     
     func testZeroOverlapThreshold() throws {
         let config = MDKitConfig(
-            processing: ProcessingConfig(overlapThreshold: 0.0)
+            processing: ProcessingConfig(
+                overlapThreshold: 0.0,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         XCTAssertNoThrow(try validator.validate(config))
     }
     
     func testOneOverlapThreshold() throws {
         let config = MDKitConfig(
-            processing: ProcessingConfig(overlapThreshold: 1.0)
+            processing: ProcessingConfig(
+                overlapThreshold: 1.0,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         XCTAssertNoThrow(try validator.validate(config))
     }
     
     func testZeroMaxMergeDistance() {
         let config = MDKitConfig(
-            processing: ProcessingConfig(mergeDistanceThreshold: 0.0)
+            processing: ProcessingConfig(
+                mergeDistanceThreshold: 0.0,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
+            )
         )
         XCTAssertNoThrow(try validator.validate(config)) // 0.0 is valid (no merging)
     }
@@ -643,7 +679,9 @@ final class ConfigurationValidatorTests: XCTestCase {
         let config = MDKitConfig(
             processing: ProcessingConfig(
                 overlapThreshold: 1.5,
-                mergeDistanceThreshold: -10.0
+                mergeDistanceThreshold: -10.0,
+                horizontalMergeThreshold: 0.15,
+                isHorizontalMergeThresholdNormalized: true
             ),
             output: OutputConfig(
                 outputDirectory: "",
@@ -670,6 +708,8 @@ final class ConfigurationValidatorTests: XCTestCase {
                 enableElementMerging: true,
                 mergeDistanceThreshold: 30.0,
                 isMergeDistanceNormalized: false,
+                horizontalMergeThreshold: 60.0,
+                isHorizontalMergeThresholdNormalized: false,
                 enableLLMOptimization: true
             ),
             output: OutputConfig(

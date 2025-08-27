@@ -7,6 +7,8 @@
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.02,
     "isMergeDistanceNormalized": true,
+    "horizontalMergeThreshold": 0.15,
+    "isHorizontalMergeThresholdNormalized": true,
     "enableLLMOptimization": true
   },
   "output": {

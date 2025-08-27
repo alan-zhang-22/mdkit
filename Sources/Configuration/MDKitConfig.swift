@@ -66,7 +66,11 @@ public struct ProcessingConfig: Codable {
     public let enableElementMerging: Bool
     public let mergeDistanceThreshold: Double
     public let isMergeDistanceNormalized: Bool
+    public let horizontalMergeThreshold: Double
+    public let isHorizontalMergeThresholdNormalized: Bool
     public let enableLLMOptimization: Bool
+    public let pdfImageScaleFactor: Double
+    public let enableImageEnhancement: Bool
     
     public init(
         overlapThreshold: Double = 0.15,
@@ -76,7 +80,11 @@ public struct ProcessingConfig: Codable {
         enableElementMerging: Bool = true,
         mergeDistanceThreshold: Double = 0.02,
         isMergeDistanceNormalized: Bool = true,
-        enableLLMOptimization: Bool = true
+        horizontalMergeThreshold: Double = 0.15,
+        isHorizontalMergeThresholdNormalized: Bool = true,
+        enableLLMOptimization: Bool = true,
+        pdfImageScaleFactor: Double = 2.0,
+        enableImageEnhancement: Bool = true
     ) {
         self.overlapThreshold = overlapThreshold
         self.enableHeaderFooterDetection = enableHeaderFooterDetection
@@ -85,7 +93,11 @@ public struct ProcessingConfig: Codable {
         self.enableElementMerging = enableElementMerging
         self.mergeDistanceThreshold = mergeDistanceThreshold
         self.isMergeDistanceNormalized = isMergeDistanceNormalized
+        self.horizontalMergeThreshold = horizontalMergeThreshold
+        self.isHorizontalMergeThresholdNormalized = isHorizontalMergeThresholdNormalized
         self.enableLLMOptimization = enableLLMOptimization
+        self.pdfImageScaleFactor = pdfImageScaleFactor
+        self.enableImageEnhancement = enableImageEnhancement
     }
 }
 
