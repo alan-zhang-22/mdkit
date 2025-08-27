@@ -212,6 +212,7 @@
       "excludeCommonHeaders": ["Page", "Chapter", "Section", "页", "章", "节"],
       "excludeCommonFooters": ["Confidential", "Copyright", "All rights reserved", "机密", "版权", "版权所有"],
       "enableContentAnalysis": true,
+      "enableContentBasedDetection": false,
       "minHeaderFooterLength": 2,
       "maxHeaderFooterLength": 150
     },
@@ -225,27 +226,28 @@
     "sameLineTolerance": 8.0,
     "enableHeaderMerging": true,
     "enableLevelCalculation": true,
-    "markdownLevelOffset": 1,
+    "markdownLevelOffset": 0,
     "patterns": {
       "numberedHeaders": [
-        "^\\d+(?:\\.\\d+)*\\s*$",
-        "^\\d+[A-Z](?:\\.\\d+)*\\s*$",
-        "^第\\d+[章节]\\s*$",
-        "^\\d+[、.．]\\s*$"
+        "^\\d+(?:\\.\\d+)*\\s",
+        "^\\d+[A-Z](?:\\.\\d+)*\\s",
+        "^第\\d+[章节]\\s",
+        "^\\d+[、.．]\\s"
       ],
       "letteredHeaders": [
-        "^[A-Z](?:\\.\\d+)*\\s*$",
-        "^[A-Z]\\d+(?:\\.\\d+)*\\s*$",
-        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+        "^[A-Z](?:\\.\\d+)*\\s",
+        "^[A-Z]\\d+(?:\\.\\d+)*\\s",
+        "^[甲乙丙丁戊己庚辛壬癸]\\s",
+        "^[A-Z]\\."
       ],
       "romanHeaders": [
-        "^[IVX]+(?:\\.\\d+)*\\s*$",
-        "^[一二三四五六七八九十]+\\s*$"
+        "^[IVX]+(?:\\.\\d+)*\\s",
+        "^[一二三四五六七八九十]+\\s"
       ],
       "namedHeaders": [
-        "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*\\s*$",
-        "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s*$",
-        "^第\\d+[章节]\\s*$"
+        "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*",
+        "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s",
+        "^第\\d+[章节]\\s"
       ]
     },
     "levelCalculation": {
@@ -269,30 +271,30 @@
     "enableNestedLists": true,
     "patterns": {
       "numberedMarkers": [
-        "^\\d+\\)\\s*$",
-        "^\\d+\\.\\s*$",
-        "^\\d+-\\s*$",
-        "^\\d+[、.．]\\s*$"
+        "^\\d+\\)\\s",
+        "^\\d+\\.\\s",
+        "^\\d+-\\s",
+        "^\\d+[、.．]\\s"
       ],
       "letteredMarkers": [
-        "^[a-z]\\)\\s*$",
-        "^[a-z]\\.\\s*$",
-        "^[a-z]-\\s*$",
-        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+        "^[a-z]\\)\\s",
+        "^[a-z]\\.\\s",
+        "^[a-z]-\\s",
+        "^[甲乙丙丁戊己庚辛壬癸]\\s"
       ],
       "bulletMarkers": [
-        "^[•\\-\\*]\\s*$",
-        "^[\\u2022\\u2023\\u25E6]\\s*$",
-        "^[·\\u2022]\\s*$"
+        "^[•\\-\\*]\\s",
+        "^[\\u2022\\u2023\\u25E6]\\s",
+        "^[·\\u2022]\\s"
       ],
       "romanMarkers": [
-        "^[ivx]+\\)\\s*$",
-        "^[ivx]+\\.\\s*$",
-        "^[一二三四五六七八九十]+\\s*$"
+        "^[ivx]+\\)\\s",
+        "^[ivx]+\\.\\s",
+        "^[一二三四五六七八九十]+\\s"
       ],
       "customMarkers": [
-        "^[\\u25A0\\u25A1\\u25A2]\\s*$",
-        "^[\\u25CB\\u25CF]\\s*$"
+        "^[\\u25A0\\u25A1\\u25A2]\\s",
+        "^[\\u25CB\\u25CF]\\s"
       ]
     },
     "indentation": {

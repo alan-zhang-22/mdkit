@@ -30,7 +30,7 @@ public struct MDKitConfig: Codable {
         output: OutputConfig = OutputConfig(),
         llm: LLMConfig = LLMConfig(),
         headerFooterDetection: HeaderFooterDetectionConfig = HeaderFooterDetectionConfig(),
-        headerDetection: HeaderDetectionConfig = HeaderDetectionConfig(),
+        headerDetection: HeaderDetectionConfig = HeaderDetectionConfig(markdownLevelOffset: 0),
         listDetection: ListDetectionConfig = ListDetectionConfig(),
         duplicationDetection: DuplicationDetectionConfig = DuplicationDetectionConfig(),
         positionSorting: PositionSortingConfig = PositionSortingConfig(),
@@ -364,7 +364,7 @@ public struct HeaderDetectionConfig: Codable {
         sameLineTolerance: Double = 8.0,
         enableHeaderMerging: Bool = true,
         enableLevelCalculation: Bool = true,
-        markdownLevelOffset: Int = 1,
+        markdownLevelOffset: Int,
         patterns: HeaderPatternsConfig = HeaderPatternsConfig(),
         levelCalculation: HeaderLevelCalculationConfig = HeaderLevelCalculationConfig()
     ) {
@@ -552,6 +552,7 @@ public struct SmartDetectionConfig: Codable {
     public let excludeCommonHeaders: [String]
     public let excludeCommonFooters: [String]
     public let enableContentAnalysis: Bool
+    public let enableContentBasedDetection: Bool
     public let minHeaderFooterLength: Int
     public let maxHeaderFooterLength: Int
     
@@ -561,6 +562,7 @@ public struct SmartDetectionConfig: Codable {
         excludeCommonHeaders: [String] = [],
         excludeCommonFooters: [String] = [],
         enableContentAnalysis: Bool = true,
+        enableContentBasedDetection: Bool = true,
         minHeaderFooterLength: Int = 2,
         maxHeaderFooterLength: Int = 150
     ) {
@@ -569,6 +571,7 @@ public struct SmartDetectionConfig: Codable {
         self.excludeCommonHeaders = excludeCommonHeaders
         self.excludeCommonFooters = excludeCommonFooters
         self.enableContentAnalysis = enableContentAnalysis
+        self.enableContentBasedDetection = enableContentBasedDetection
         self.minHeaderFooterLength = minHeaderFooterLength
         self.maxHeaderFooterLength = maxHeaderFooterLength
     }

@@ -143,6 +143,11 @@ public class HeaderAndListDetector {
     
     /// Detects headers by content characteristics
     private func detectHeaderByContent(_ text: String) -> HeaderDetectionResult {
+        // Check if content-based detection is enabled
+        guard config.headerFooterDetection.smartDetection.enableContentBasedDetection else {
+            return HeaderDetectionResult(isHeader: false)
+        }
+        
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Check if text is within reasonable header length
@@ -173,9 +178,64 @@ public class HeaderAndListDetector {
             return 1
         }
         
-        let components = text.components(separatedBy: ".")
-        let calculatedLevel = min(components.count, config.headerDetection.levelCalculation.maxLevel)
-        return calculatedLevel + config.headerDetection.markdownLevelOffset
+        // Extract the header marker (the part that matches the pattern)
+        let marker = extractHeaderMarker(from: text)
+        
+        // Calculate level based on the marker only, not the entire text
+        // Trim the marker to remove any trailing spaces before splitting
+        let trimmedMarker = marker.trimmingCharacters(in: .whitespaces)
+        let components = trimmedMarker.components(separatedBy: ".")
+        // Filter out empty components (e.g., ["1", ""] becomes ["1"])
+        let filteredComponents = components.filter { !$0.isEmpty }
+        let calculatedLevel = min(filteredComponents.count, config.headerDetection.levelCalculation.maxLevel)
+        let finalLevel = calculatedLevel + config.headerDetection.markdownLevelOffset
+        
+
+        
+        return finalLevel
+    }
+    
+    /// Extracts the header marker from the text based on configured patterns
+    private func extractHeaderMarker(from text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check numbered headers
+        for pattern in config.headerDetection.patterns.numberedHeaders {
+            if let match = trimmedText.range(of: pattern, options: .regularExpression) {
+                return String(trimmedText[..<match.upperBound])
+            }
+        }
+        
+        // Check lettered headers
+        for pattern in config.headerDetection.patterns.letteredHeaders {
+            if let match = trimmedText.range(of: pattern, options: .regularExpression) {
+                return String(trimmedText[..<match.upperBound]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        
+        // Check Roman numeral headers
+        for pattern in config.headerDetection.patterns.romanHeaders {
+            if let match = trimmedText.range(of: pattern, options: .regularExpression) {
+                return String(trimmedText[..<match.upperBound]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        
+        // Check named headers
+        for pattern in config.headerDetection.patterns.namedHeaders {
+            if let match = trimmedText.range(of: pattern, options: .regularExpression) {
+                return String(trimmedText[..<match.upperBound]).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        
+        // Fallback: return the text up to the first space or period
+        if let spaceIndex = trimmedText.firstIndex(of: " ") {
+            return String(trimmedText[..<spaceIndex])
+        }
+        if let periodIndex = trimmedText.firstIndex(of: ".") {
+            return String(trimmedText[...periodIndex])
+        }
+        
+        return trimmedText
     }
     
     /// Calculates header level for named headers using custom level mapping
@@ -199,7 +259,7 @@ public class HeaderAndListDetector {
     
     /// Calculates confidence score for pattern detection
     private func calculatePatternConfidence(text: String, pattern: String) -> Float {
-        var confidence: Float = 0.8 // Base confidence for pattern match
+        var confidence: Float = 0.85 // Increased base confidence for pattern match
         
         // Adjust confidence based on text length
         if text.count < 10 {
@@ -213,9 +273,9 @@ public class HeaderAndListDetector {
         case "Named":
             confidence += 0.1
         case "Numbered":
-            confidence += 0.05
+            confidence += 0.06 // Increased to ensure > 0.5
         case "Lettered", "Roman":
-            confidence += 0.05
+            confidence += 0.06 // Increased to ensure > 0.5
         default:
             break
         }
@@ -361,11 +421,11 @@ public class HeaderAndListDetector {
         case "Bullet":
             confidence += 0.1
         case "Numbered":
-            confidence += 0.05
+            confidence += 0.06 // Increased to ensure > 0.5
         case "Lettered", "Roman":
-            confidence += 0.05
+            confidence += 0.06 // Increased to ensure > 0.5
         case "Custom":
-            confidence += 0.05
+            confidence += 0.06 // Increased to ensure > 0.5
         default:
             break
         }

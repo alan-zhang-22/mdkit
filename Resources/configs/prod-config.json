@@ -211,6 +211,7 @@
       "excludeCommonHeaders": ["Page", "Chapter", "Section", "页", "章", "节"],
       "excludeCommonFooters": ["Confidential", "Copyright", "All rights reserved", "机密", "版权", "版权所有"],
       "enableContentAnalysis": true,
+      "enableContentBasedDetection": false,
       "minHeaderFooterLength": 3,
       "maxHeaderFooterLength": 200
     },
@@ -224,7 +225,7 @@
     "sameLineTolerance": 5.0,
     "enableHeaderMerging": true,
     "enableLevelCalculation": true,
-    "markdownLevelOffset": 1,
+    "markdownLevelOffset": 0,
     "patterns": {
       "numberedHeaders": [
         "^\\d+(?:\\.\\d+)*\\s*$",
@@ -235,7 +236,8 @@
       "letteredHeaders": [
         "^[A-Z](?:\\.\\d+)*\\s*$",
         "^[A-Z]\\d+(?:\\.\\d+)*\\s*$",
-        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+        "^[甲乙丙丁戊己庚辛壬癸]\\s*$",
+        "^[A-Z]\\."
       ],
       "romanHeaders": [
         "^[IVX]+(?:\\.\\d+)*\\s*$",

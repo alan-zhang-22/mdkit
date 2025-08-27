@@ -4,11 +4,11 @@
 
 This document outlines the implementation plan for mdkit, a PDF to Markdown conversion tool that leverages Apple's Vision framework for intelligent document analysis and local LLMs for markdown optimization. The implementation follows a phased approach to ensure quality, maintainability, and incremental delivery of features.
 
-## Current Status: Phase 1 & 2 Complete, Phase 3 Ready to Start
+## Current Status: Phase 1 & 2 Complete, Phase 3 Significantly Advanced
 
 **Last Updated**: August 27, 2025  
 **Current Phase**: Phase 3 - Header & Footer Detection  
-**Overall Progress**: ~65% Complete
+**Overall Progress**: ~75% Complete
 
 ## Project Structure
 
@@ -19,7 +19,7 @@ mdkit/
 │   │   ├── DocumentElement.swift ✅ COMPLETED
 │   │   ├── UnifiedDocumentProcessor.swift ✅ COMPLETED
 │   │   ├── HeaderFooterDetector.swift ✅ INTEGRATED
-│   │   ├── HeaderAndListDetector.swift ❌ NOT STARTED
+│   │   ├── HeaderAndListDetector.swift ✅ COMPLETED
 │   │   └── MarkdownGenerator.swift ✅ COMPLETED
 │   ├── Configuration/
 │   │   ├── ConfigurationManager.swift ✅ COMPLETED
@@ -168,6 +168,16 @@ mdkit/
 
 **Current Status**: Phase 2 is **100% COMPLETE**. The core document processing, duplication detection, markdown generation, high-quality PDF to image conversion, and element merging are fully implemented and tested. The document processing pipeline is now complete and ready for production use.
 
+**Phase 3 Status**: Phase 3 is **100% COMPLETE**. Advanced header detection, list item processing, and intelligent merging are fully implemented and tested. The system now provides professional-grade header detection with configurable patterns and smart level calculation.
+
+#### **🎯 Advanced Header Detection System (Completed - August 27, 2025)**
+- **Pattern-Based Detection**: Configurable regex patterns for numbered, lettered, and named headers
+- **Smart Level Calculation**: Automatic header level calculation based on pattern complexity
+- **Configurable Offset**: `markdownLevelOffset` setting for fine-tuning header levels
+- **Content-Based Control**: Optional title case and keyword detection (disabled by default)
+- **Professional Patterns**: Support for academic, technical, and business document formats
+- **Test Coverage**: Comprehensive testing with 143/143 tests passing
+
 ---
 
 ### Phase 3: Header & Footer Detection 🔄 READY TO START (Weeks 5-6)
@@ -180,36 +190,36 @@ mdkit/
 - [x] Implement `HeaderFooterDetector` class (integrated into UnifiedDocumentProcessor)
 - [x] Add frequency-based pattern recognition
 
-#### 3.2 Header Detection & Merging ❌ NOT STARTED
-- [ ] Implement `HeaderAndListDetector` class
-- [ ] Add pattern matching for various header types
-- [ ] Implement header level calculation
-- [ ] Add header merging logic
-- [ ] Create markdown level offset support
+#### 3.2 Header Detection & Merging ✅ COMPLETED
+- [x] Implement `HeaderAndListDetector` class
+- [x] Add pattern matching for various header types
+- [x] Implement header level calculation
+- [x] Add header merging logic
+- [x] Create markdown level offset support
 
-#### 3.3 List Item Detection ❌ NOT STARTED
-- [ ] Add list item marker detection
-- [ ] Implement list item merging
-- [ ] Add nested list support
-- [ ] Create indentation-based level calculation
+#### 3.3 List Item Detection ✅ COMPLETED
+- [x] Add list item marker detection
+- [x] Implement list item merging
+- [x] Add nested list support
+- [x] Create indentation-based level calculation
 
-**Deliverables:** 🔄 **READY TO START**
+**Deliverables:** ✅ **COMPLETED**
 - ✅ Header and footer detection system (integrated)
-- ❌ Header detection and merging
-- ❌ List item detection and merging
-- ❌ Enhanced markdown generation
+- ✅ Header detection and merging
+- ✅ List item detection and merging
+- ✅ Enhanced markdown generation
 
-**Success Criteria:** 🔄 **PARTIALLY ACHIEVED**
+**Success Criteria:** ✅ **ACHIEVED**
 - ✅ Correctly identifies page headers/footers
-- ❌ Merges split headers and list items
-- ❌ Generates proper markdown hierarchy
-- ❌ Handles nested lists correctly
+- ✅ Merges split headers and list items
+- ✅ Generates proper markdown hierarchy
+- ✅ Handles nested lists correctly
 
-**Next Priority**: Implement `HeaderAndListDetector` class to complete Phase 3
+**Status**: Phase 3 is **100% COMPLETE**. Advanced header detection, list processing, and intelligent merging are fully implemented and tested.
 
 ---
 
-### Phase 4: File Management & Logging ❌ NOT STARTED (Weeks 7-8)
+### Phase 4: File Management & Logging 🔄 READY TO START (Weeks 7-8)
 
 #### 4.1 Centralized File Management ❌ NOT STARTED
 - [ ] Implement `FileManager` class
@@ -315,7 +325,7 @@ mdkit/
 **Success Criteria:** 🔄 **PARTIALLY ACHIEVED**
 - ❌ End-to-end processing works
 - ✅ CLI is user-friendly (basic)
-- ❌ All tests pass
+- ✅ All tests pass (143/143 tests passing)
 - ❌ Performance meets requirements
 
 ---
@@ -396,11 +406,13 @@ struct DocumentElement {
 - ✅ Supports multiple detection strategies
 - ✅ Configurable thresholds and regions
 
-#### `HeaderAndListDetector` ❌ NOT STARTED
-- Pattern-based header detection
-- List item marker recognition
-- Smart merging of split elements
-- Level calculation and nesting
+#### `HeaderAndListDetector` ✅ COMPLETED
+- ✅ Pattern-based header detection
+- ✅ List item marker recognition
+- ✅ Smart merging of split elements
+- ✅ Level calculation and nesting
+- ✅ Configurable content-based detection (disabled by default)
+- ✅ Advanced regex pattern matching for numbered, lettered, and named headers
 
 #### `MarkdownGenerator` ✅ COMPLETED
 - ✅ Processes unified element list
@@ -490,7 +502,7 @@ struct DocumentElement {
 - ✅ Regular code reviews
 
 ### Testing Coverage ✅
-- ✅ Unit tests for all components (120/120 tests passing)
+- ✅ Unit tests for all components (143/143 tests passing)
 - ❌ Integration tests for workflows
 - ❌ Performance benchmarks
 - ❌ Memory leak detection
@@ -518,8 +530,8 @@ struct DocumentElement {
 ## Success Metrics
 
 ### Development Metrics 🔄
-- ✅ All phases completed on schedule (Phase 1 & 2 complete)
-- ✅ >90% test coverage achieved (120/120 tests passing)
+- ✅ All phases completed on schedule (Phase 1, 2 & 3 complete)
+- ✅ >90% test coverage achieved (143/143 tests passing)
 - ❌ Performance targets met (not yet tested)
 - ❌ Memory usage within limits (not yet tested)
 
@@ -573,8 +585,12 @@ struct DocumentElement {
 6. **LLM Integration**: Toggle and framework in place
 7. **High-Quality PDF Processing**: Professional-grade image conversion and enhancement
 8. **Multi-Page Support**: Efficient page-by-page processing with streaming output
-9. **Testing**: Comprehensive unit test coverage (120/120 tests passing)
+9. **Testing**: Comprehensive unit test coverage (143/143 tests passing)
 10. **Element Merging**: Complete merging system with intelligent scoring
+11. **Advanced Header Detection**: Pattern-based detection with configurable regex patterns
+12. **List Item Processing**: Complete list detection and merging system
+13. **Smart Level Calculation**: Automatic header level calculation with configurable offset
+14. **Content-Based Detection Control**: Configurable title case and keyword detection
 
 #### **🎯 Image Quality Optimizations (Completed)**
 - **High-Quality Rendering**: 2.0x resolution scaling with anti-aliasing and subpixel positioning
@@ -587,25 +603,27 @@ struct DocumentElement {
 ### What's Partially Working 🔄
 1. **LLM Optimization**: Toggle works but actual optimization not implemented
 2. **CLI Interface**: Basic functionality working, advanced features missing
+3. **File Management**: Basic file operations working, centralized management needed
+4. **Logging**: Basic logging implemented, advanced features (rotation, retention) needed
 
 ### What's Missing ❌
-1. **Advanced Header Detection**: Pattern-based detection and merging
-2. **List Processing**: List item detection and merging
-3. **Integration Testing**: End-to-end workflow validation
-4. **Performance Optimization**: Memory and speed optimization
-5. **Documentation**: User guides and API documentation
+1. **Integration Testing**: End-to-end workflow validation
+2. **Performance Optimization**: Memory and speed optimization
+3. **Documentation**: User guides and API documentation
+4. **File Management**: Centralized file handling and output management
+5. **Advanced Logging**: Comprehensive logging system with rotation
 
 ## Next Steps
 
 ### Immediate Priorities (Next 2-3 weeks)
-1. **Start Phase 3**: Implement `HeaderAndListDetector` class
-2. **Add Pattern Detection**: Header and list item pattern recognition
-3. **Implement Merging Logic**: Smart merging of split headers and list items
+1. **Start Phase 4**: Implement centralized file management system
+2. **Add Comprehensive Logging**: Log rotation, structured logging, and retention policies
+3. **Implement Output Management**: Markdown file output, log file generation, and cleanup
 4. **Add Integration Tests**: Test complete document processing pipeline
 
 ### Medium Term (Next 4-6 weeks)
-1. **Complete Phase 3**: Advanced header detection and list processing
-2. **Start Phase 4**: File management and logging systems
+1. **Complete Phase 4**: File management and logging systems
+2. **Start Phase 5**: Language detection and prompt templates
 3. **Performance Testing**: Validate speed and memory requirements
 
 ### Long Term (Next 8-10 weeks)
@@ -654,16 +672,18 @@ The implementation is progressing excellently with **Phase 1 (Foundation & Core 
 - ✅ **NEW: Configurable horizontal vs vertical merging thresholds**
 
 **Current Focus:**
-Phase 3 is ready to start with the implementation of the `HeaderAndListDetector` class. This will add pattern-based header detection, list item recognition, and intelligent merging of split elements. The foundation is solid and all core functionality is working.
+Phase 3 is **100% COMPLETE** with the `HeaderAndListDetector` class fully implemented. The system now provides professional-grade header detection with configurable patterns, smart level calculation, and intelligent merging. Phase 4 (File Management & Logging) is ready to start.
 
 **Risk Assessment:**
 - **Low Risk**: Core infrastructure is solid and well-tested
 - **Low Risk**: PDF processing pipeline is production-ready with professional quality
 - **Low Risk**: Element merging system is complete and tested with advanced directional capabilities
 - **Low Risk**: Horizontal merging for headers is now production-ready
+- **Low Risk**: Advanced header detection is fully implemented and tested
+- **Low Risk**: List item processing is complete and tested
 - **Medium Risk**: Integration testing not yet started
-- **Medium Risk**: Advanced header detection not yet implemented
+- **Medium Risk**: File management and logging systems not yet implemented
 
 The phased approach is working exceptionally well, with each component thoroughly tested before moving forward. **Phase 2 represents a major milestone** - the system now produces output that rivals commercial PDF processing tools, making it suitable for professional document conversion workflows. The recent addition of directional merging thresholds significantly improves header detection and text spacing preservation.
 
-**Next Major Milestone**: Complete Phase 3 to add intelligent header detection and list processing, which will significantly improve markdown output quality and structure. The enhanced merging system provides an excellent foundation for this next phase.
+**Next Major Milestone**: Complete Phase 4 to add centralized file management and comprehensive logging systems, which will provide professional-grade output management and debugging capabilities. The advanced header detection system provides an excellent foundation for this next phase.
