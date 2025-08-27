@@ -293,8 +293,13 @@ public struct PromptTemplates: Codable {
     public let fallbackLanguage: String
     
     public init(
-        languages: [String: LanguagePrompts] = [:],
-        defaultLanguage: String = "zh",
+        languages: [String: LanguagePrompts] = [
+            "en": LanguagePrompts(
+                systemPrompt: ["You are an expert document processor specializing in converting technical documents to well-structured markdown."],
+                markdownOptimizationPrompt: ["Please optimize this markdown for better structure and readability."]
+            )
+        ],
+        defaultLanguage: String = "en",
         fallbackLanguage: String = "en"
     ) {
         self.languages = languages

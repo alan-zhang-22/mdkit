@@ -23,9 +23,9 @@ struct MDKitCLI: ParsableCommand {
         
         // Configure logging system
         try LoggingConfiguration.configure(
-            level: config.logging.loggerLevel,
-            logFileName: config.logging.logFileName,
-            logDirectory: config.logging.logDirectory
+            level: Logger.Level(rawValue: config.logging.level) ?? .info,
+            logFileName: "mdkit.log",
+            logDirectory: config.logging.outputFolder
         )
         
         // Create logger for this command
@@ -70,9 +70,9 @@ struct Convert: ParsableCommand {
         
         // Configure logging system
         try LoggingConfiguration.configure(
-            level: baseConfig.logging.loggerLevel,
-            logFileName: baseConfig.logging.logFileName,
-            logDirectory: baseConfig.logging.logDirectory
+            level: Logger.Level(rawValue: baseConfig.logging.level) ?? .info,
+            logFileName: "mdkit.log",
+            logDirectory: baseConfig.logging.outputFolder
         )
         
         // Create logger for this command
@@ -177,9 +177,9 @@ struct Config: ParsableCommand {
         
         // Configure logging system
         try LoggingConfiguration.configure(
-            level: baseConfig.logging.loggerLevel,
-            logFileName: baseConfig.logging.logFileName,
-            logDirectory: baseConfig.logging.logDirectory
+            level: Logger.Level(rawValue: baseConfig.logging.level) ?? .info,
+            logFileName: "mdkit.log",
+            logDirectory: baseConfig.logging.outputFolder
         )
         
         // Create logger for this command

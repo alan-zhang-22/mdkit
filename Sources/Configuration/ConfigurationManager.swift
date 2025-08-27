@@ -123,10 +123,16 @@ public class ConfigurationManager: ConfigurationManaging {
             processing: ProcessingConfig(),
             output: OutputConfig(),
             llm: LLMConfig(),
-            logging: LoggingConfig(),
             headerFooterDetection: HeaderFooterDetectionConfig(),
             headerDetection: HeaderDetectionConfig(),
-            listDetection: ListDetectionConfig()
+            listDetection: ListDetectionConfig(),
+            duplicationDetection: DuplicationDetectionConfig(),
+            positionSorting: PositionSortingConfig(),
+            markdownGeneration: MarkdownGenerationConfig(),
+            ocr: OCRConfig(),
+            performance: PerformanceConfig(),
+            fileManagement: FileManagementConfig(),
+            logging: LoggingConfig()
         )
     }
     
@@ -158,50 +164,333 @@ public class ConfigurationManager: ConfigurationManaging {
             processing: ProcessingConfig(
                 overlapThreshold: 0.15,
                 enableHeaderFooterDetection: true,
-                headerRegion: 0.0...0.12,
-                footerRegion: 0.88...1.0,
+                headerRegion: [0.0, 0.12],
+                footerRegion: [0.88, 1.0],
                 enableElementMerging: true,
-                mergeDistanceThreshold: 75.0,
+                mergeDistanceThreshold: 0.02,
+                isMergeDistanceNormalized: true,
                 enableLLMOptimization: true
             ),
             output: OutputConfig(
-                outputDirectory: "./output",
-                filenamePattern: "{filename}_converted.md",
+                outputDirectory: "./dev-output",
+                filenamePattern: "{filename}_dev.md",
                 createLogFiles: true,
-                overwriteExisting: false,
+                overwriteExisting: true,
                 markdown: MarkdownConfig(
                     headerLevelOffset: 0,
                     useATXHeaders: true,
                     addTableOfContents: true,
                     preserveFormatting: true,
-                    listMarkerStyle: .dash
+                    listMarkerStyle: "-"
                 )
             ),
             llm: LLMConfig(
                 enabled: true,
+                backend: "LocalLLMClientLlama",
+                modelPath: "",
                 model: ModelConfig(
-                    identifier: "llama-2-7b-chat",
-                    modelPath: nil,
-                    type: .llama
+                    identifier: "ggml-org/Meta-Llama-3.1-8B-Instruct-Q4_0-GGUF",
+                    name: "Meta Llama 3.1 8B Instruct Q4_0",
+                    type: "llama",
+                    downloadUrl: "",
+                    localPath: "~/.localllmclient/huggingface/models/meta-llama-3.1-8b-instruct-q4_0.gguf"
                 ),
                 parameters: ProcessingParameters(
-                    temperature: 0.6,
-                    topK: 50,
-                    topP: 0.85,
-                    maxTokens: 4096
+                    temperature: 0.3,
+                    topP: 0.9,
+                    topK: 40,
+                    penaltyRepeat: 1.1,
+                    penaltyFrequency: 0.8,
+                    maxTokens: 2048,
+                    batch: 256,
+                    threads: 4,
+                    gpuLayers: 0
                 ),
-                prompts: PromptConfig()
+                options: LLMOptions(
+                    responseFormat: "markdown",
+                    verbose: true,
+                    streaming: true,
+                    jsonMode: false
+                ),
+                contextManagement: ContextManagement(
+                    maxContextLength: 2048,
+                    overlapLength: 100,
+                    chunkSize: 500,
+                    enableSlidingWindow: true,
+                    enableHierarchicalProcessing: true
+                ),
+                memoryOptimization: MemoryOptimization(
+                    maxMemoryUsage: "2GB",
+                    enableStreaming: true,
+                    cleanupAfterBatch: true,
+                    enableMemoryMapping: false
+                ),
+                promptTemplates: PromptTemplates(
+                    languages: [
+                        "zh": LanguagePrompts(
+                            systemPrompt: [
+                                "您是一位专业的文档处理专家，专门负责将中文PDF文档转换为结构良好的markdown格式。",
+                                "您的专业领域包括：",
+                                "- 中文技术文档和标准规范",
+                                "- 中文工程文档和合规要求",
+                                "- 中文学术论文和研究文档",
+                                "- 中文商业报告和程序手册"
+                            ],
+                            markdownOptimizationPrompt: [
+                                "开发环境 - 文档信息：",
+                                "标题：{documentTitle}",
+                                "页数：{pageCount}",
+                                "元素数量：{elementCount}",
+                                "上下文：{documentContext}",
+                                "检测语言：{detectedLanguage}（置信度：{languageConfidence}）",
+                                "",
+                                "请优化此markdown以实现：",
+                                "1. 更好的结构和组织",
+                                "2. 改进的可读性和清晰度",
+                                "3. 一致的格式和层次结构",
+                                "4. 技术准确性保持",
+                                "5. 中文文档的本地化优化",
+                                "6. 开发友好的格式"
+                            ]
+                        ),
+                        "en": LanguagePrompts(
+                            systemPrompt: [
+                                "You are an expert document processor specializing in converting technical documents to well-structured markdown.",
+                                "Your expertise includes:",
+                                "- ISO standards and technical specifications",
+                                "- Engineering documentation and compliance requirements",
+                                "- Academic papers and research documents",
+                                "- Business reports and procedural manuals"
+                            ],
+                            markdownOptimizationPrompt: [
+                                "Development Environment - Document: {documentTitle}",
+                                "Pages: {pageCount}",
+                                "Elements: {elementCount}",
+                                "Context: {documentContext}",
+                                "Detected Language: {detectedLanguage} (Confidence: {languageConfidence})",
+                                "",
+                                "Please optimize this markdown for:",
+                                "1. Better structure and organization",
+                                "2. Improved readability and clarity",
+                                "3. Consistent formatting and hierarchy",
+                                "4. Technical accuracy preservation",
+                                "5. Development-friendly formatting"
+                            ]
+                        )
+                    ],
+                    defaultLanguage: "zh",
+                    fallbackLanguage: "en"
+                )
+            ),
+            headerFooterDetection: HeaderFooterDetectionConfig(
+                enabled: true,
+                headerFrequencyThreshold: 0.6,
+                footerFrequencyThreshold: 0.6,
+                regionBasedDetection: RegionBasedDetectionConfig(
+                    enabled: true,
+                    headerRegionY: 72.0,
+                    footerRegionY: 720.0,
+                    regionTolerance: 10.0
+                ),
+                percentageBasedDetection: PercentageBasedDetectionConfig(
+                    enabled: true,
+                    headerRegionHeight: 0.12,
+                    footerRegionHeight: 0.12
+                ),
+                smartDetection: SmartDetectionConfig(
+                    enabled: true,
+                    excludePageNumbers: true,
+                    excludeCommonHeaders: ["Page", "Chapter", "Section", "页", "章", "节"],
+                    excludeCommonFooters: ["Confidential", "Copyright", "All rights reserved", "机密", "版权", "版权所有"],
+                    enableContentAnalysis: true,
+                    minHeaderFooterLength: 2,
+                    maxHeaderFooterLength: 150
+                ),
+                multiRegionDetection: MultiRegionDetectionConfig(
+                    enabled: false,
+                    maxRegions: 2
+                )
+            ),
+            headerDetection: HeaderDetectionConfig(
+                enabled: true,
+                sameLineTolerance: 8.0,
+                enableHeaderMerging: true,
+                enableLevelCalculation: true,
+                markdownLevelOffset: 1,
+                patterns: HeaderPatternsConfig(
+                    numberedHeaders: [
+                        "^\\d+(?:\\.\\d+)*\\s*$",
+                        "^\\d+[A-Z](?:\\.\\d+)*\\s*$",
+                        "^第\\d+[章节]\\s*$",
+                        "^\\d+[、.．]\\s*$"
+                    ],
+                    letteredHeaders: [
+                        "^[A-Z](?:\\.\\d+)*\\s*$",
+                        "^[A-Z]\\d+(?:\\.\\d+)*\\s*$",
+                        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+                    ],
+                    romanHeaders: [
+                        "^[IVX]+(?:\\.\\d+)*\\s*$",
+                        "^[一二三四五六七八九十]+\\s*$"
+                    ],
+                    namedHeaders: [
+                        "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*\\s*$",
+                        "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s*$",
+                        "^第\\d+[章节]\\s*$"
+                    ]
+                ),
+                levelCalculation: HeaderLevelCalculationConfig(
+                    autoCalculate: true,
+                    maxLevel: 6,
+                    customLevels: [
+                        "Part": 1,
+                        "Chapter": 2,
+                        "Section": 3,
+                        "部分": 1,
+                        "章": 2,
+                        "节": 3
+                    ]
+                )
+            ),
+            listDetection: ListDetectionConfig(
+                enabled: true,
+                sameLineTolerance: 8.0,
+                enableListItemMerging: true,
+                enableLevelCalculation: true,
+                enableNestedLists: true,
+                patterns: ListPatternsConfig(
+                    numberedMarkers: [
+                        "^\\d+\\)\\s*$",
+                        "^\\d+\\.\\s*$",
+                        "^\\d+-\\s*$",
+                        "^\\d+[、.．]\\s*$"
+                    ],
+                    letteredMarkers: [
+                        "^[a-z]\\)\\s*$",
+                        "^[a-z]\\.\\s*$",
+                        "^[a-z]-\\s*$",
+                        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+                    ],
+                    bulletMarkers: [
+                        "^[•\\-\\*]\\s*$",
+                        "^[\\u2022\\u2023\\u25E6]\\s*$",
+                        "^[·\\u2022]\\s*$"
+                    ],
+                    romanMarkers: [
+                        "^[ivx]+\\)\\s*$",
+                        "^[ivx]+\\.\\s*$",
+                        "^[一二三四五六七八九十]+\\s*$"
+                    ],
+                    customMarkers: [
+                        "^[\\u25A0\\u25A1\\u25A2]\\s*$",
+                        "^[\\u25CB\\u25CF]\\s*$"
+                    ]
+                ),
+                indentation: ListIndentationConfig(
+                    baseIndentation: 60.0,
+                    levelThreshold: 25.0,
+                    enableXCoordinateAnalysis: true
+                )
+            ),
+            duplicationDetection: DuplicationDetectionConfig(
+                enabled: true,
+                overlapThreshold: 0.25,
+                enableLogging: true,
+                logOverlaps: true,
+                strictMode: false
+            ),
+            positionSorting: PositionSortingConfig(
+                sortBy: "verticalPosition",
+                tolerance: 8.0,
+                enableHorizontalSorting: false,
+                confidenceWeighting: 0.3
+            ),
+            markdownGeneration: MarkdownGenerationConfig(
+                preservePageBreaks: false,
+                extractImages: true,
+                headerFormat: "atx",
+                listFormat: "unordered",
+                tableFormat: "standard",
+                codeBlockFormat: "fenced"
+            ),
+            ocr: OCRConfig(
+                recognitionLevel: "accurate",
+                languages: ["zh-CN", "en-US"],
+                useLanguageCorrection: true,
+                minimumTextHeight: 0.008,
+                customWords: ["技术规范", "质量标准", "合规要求", "工程文档"],
+                enableDocumentAnalysis: true,
+                preserveLayout: true,
+                tableDetection: true,
+                listDetection: true,
+                barcodeDetection: false
+            ),
+            performance: PerformanceConfig(
+                maxMemoryUsage: "1GB",
+                enableStreaming: true,
+                batchSize: 5,
+                cleanupAfterBatch: true,
+                enableMultiThreading: true,
+                maxThreads: 4
+            ),
+            fileManagement: FileManagementConfig(
+                outputDirectory: "./dev-output",
+                markdownDirectory: "./dev-markdown",
+                logDirectory: "./dev-logs",
+                tempDirectory: "./dev-temp",
+                createDirectories: true,
+                overwriteExisting: true,
+                preserveOriginalNames: true,
+                fileNamingStrategy: "timestamped"
             ),
             logging: LoggingConfig(
-                level: "info",
-                enableConsole: true,
-                enableFile: true,
-                logFileName: "mdkit.log",
-                logDirectory: "./logs",
-                maxFileSize: 1024 * 1024, // 1MB
-                maxFiles: 5,
-                includeTimestamps: true,
-                includeLogLevels: true
+                enabled: true,
+                level: "debug",
+                outputFolder: "dev-logs",
+                enableConsoleOutput: true,
+                logFileRotation: true,
+                maxLogFileSize: "5MB",
+                logCategories: LogCategories(
+                    ocrElements: LogCategory(
+                        enabled: true,
+                        format: "json",
+                        includeBoundingBoxes: true,
+                        includeConfidence: true
+                    ),
+                    documentObservation: LogCategory(
+                        enabled: true,
+                        format: "json",
+                        includePositionData: true,
+                        includeElementTypes: true
+                    ),
+                    markdownGeneration: LogCategory(
+                        enabled: true,
+                        format: "markdown",
+                        includeSourceMapping: true,
+                        includeProcessingTime: true
+                    ),
+                    llmPrompts: LogCategory(
+                        enabled: true,
+                        format: "json",
+                        includeProcessingTime: true,
+                        includeSystemPrompt: true,
+                        includeUserPrompt: true,
+                        includeLLMResponse: true,
+                        includeTokenCounts: true
+                    ),
+                    llmOptimizedMarkdown: LogCategory(
+                        enabled: true,
+                        format: "markdown",
+                        includeOptimizationDetails: true,
+                        includeBeforeAfterComparison: true
+                    )
+                ),
+                logFileNaming: LogFileNaming(
+                    pattern: "dev_{timestamp}_{document}_{category}.{extension}",
+                    timestampFormat: "yyyyMMdd_HHmmss",
+                    includeDocumentHash: true,
+                    maxFileNameLength: 100
+                )
             )
         )
         
@@ -258,11 +547,165 @@ public class ConfigurationManager: ConfigurationManaging {
             if config.llm.parameters.maxTokens <= 0 {
                 errors.append("LLM max tokens must be positive")
             }
+            
+            if config.llm.parameters.batch <= 0 {
+                errors.append("LLM batch size must be positive")
+            }
+            
+            if config.llm.parameters.threads <= 0 {
+                errors.append("LLM threads must be positive")
+            }
+            
+            if config.llm.parameters.gpuLayers < 0 {
+                errors.append("LLM GPU layers must be non-negative")
+            }
+            
+            if config.llm.contextManagement.maxContextLength <= 0 {
+                errors.append("LLM max context length must be positive")
+            }
+            
+            if config.llm.contextManagement.chunkSize <= 0 {
+                errors.append("LLM chunk size must be positive")
+            }
+        }
+        
+        // Validate header footer detection configuration
+        if config.headerFooterDetection.enabled {
+            if config.headerFooterDetection.headerFrequencyThreshold < 0.0 || config.headerFooterDetection.headerFrequencyThreshold > 1.0 {
+                errors.append("Header frequency threshold must be between 0.0 and 1.0")
+            }
+            
+            if config.headerFooterDetection.footerFrequencyThreshold < 0.0 || config.headerFooterDetection.footerFrequencyThreshold > 1.0 {
+                errors.append("Footer frequency threshold must be between 0.0 and 1.0")
+            }
+            
+            if config.headerFooterDetection.regionBasedDetection.enabled {
+                if config.headerFooterDetection.regionBasedDetection.regionTolerance < 0.0 {
+                    errors.append("Region tolerance must be non-negative")
+                }
+            }
+            
+            if config.headerFooterDetection.percentageBasedDetection.enabled {
+                if config.headerFooterDetection.percentageBasedDetection.headerRegionHeight < 0.0 || config.headerFooterDetection.percentageBasedDetection.headerRegionHeight > 1.0 {
+                    errors.append("Header region height must be between 0.0 and 1.0")
+                }
+                
+                if config.headerFooterDetection.percentageBasedDetection.footerRegionHeight < 0.0 || config.headerFooterDetection.percentageBasedDetection.footerRegionHeight > 1.0 {
+                    errors.append("Footer region height must be between 0.0 and 1.0")
+                }
+            }
+            
+            if config.headerFooterDetection.smartDetection.minHeaderFooterLength < 0 {
+                errors.append("Minimum header/footer length must be non-negative")
+            }
+            
+            if config.headerFooterDetection.smartDetection.maxHeaderFooterLength < config.headerFooterDetection.smartDetection.minHeaderFooterLength {
+                errors.append("Maximum header/footer length must be greater than or equal to minimum length")
+            }
+        }
+        
+        // Validate header detection configuration
+        if config.headerDetection.enabled {
+            if config.headerDetection.sameLineTolerance < 0.0 {
+                errors.append("Header same line tolerance must be non-negative")
+            }
+            
+            if config.headerDetection.markdownLevelOffset < 0 {
+                errors.append("Header markdown level offset must be non-negative")
+            }
+            
+            if config.headerDetection.levelCalculation.maxLevel < 1 || config.headerDetection.levelCalculation.maxLevel > 6 {
+                errors.append("Header max level must be between 1 and 6")
+            }
+        }
+        
+        // Validate list detection configuration
+        if config.listDetection.enabled {
+            if config.listDetection.sameLineTolerance < 0.0 {
+                errors.append("List same line tolerance must be non-negative")
+            }
+            
+            if config.listDetection.indentation.baseIndentation < 0.0 {
+                errors.append("List base indentation must be non-negative")
+            }
+            
+            if config.listDetection.indentation.levelThreshold < 0.0 {
+                errors.append("List level threshold must be non-negative")
+            }
+        }
+        
+        // Validate duplication detection configuration
+        if config.duplicationDetection.enabled {
+            if config.duplicationDetection.overlapThreshold < 0.0 || config.duplicationDetection.overlapThreshold > 1.0 {
+                errors.append("Duplication overlap threshold must be between 0.0 and 1.0")
+            }
+        }
+        
+        // Validate position sorting configuration
+        if config.positionSorting.tolerance < 0.0 {
+            errors.append("Position sorting tolerance must be non-negative")
+        }
+        
+        if config.positionSorting.confidenceWeighting < 0.0 || config.positionSorting.confidenceWeighting > 1.0 {
+            errors.append("Position sorting confidence weighting must be between 0.0 and 1.0")
+        }
+        
+        // Validate OCR configuration
+        if config.ocr.minimumTextHeight < 0.0 || config.ocr.minimumTextHeight > 1.0 {
+            errors.append("OCR minimum text height must be between 0.0 and 1.0")
+        }
+        
+        if config.ocr.languages.isEmpty {
+            errors.append("OCR languages cannot be empty")
+        }
+        
+        // Validate performance configuration
+        if config.performance.batchSize <= 0 {
+            errors.append("Performance batch size must be positive")
+        }
+        
+        if config.performance.maxThreads <= 0 {
+            errors.append("Performance max threads must be positive")
+        }
+        
+        // Validate file management configuration
+        if config.fileManagement.outputDirectory.isEmpty {
+            errors.append("File management output directory cannot be empty")
+        }
+        
+        if config.fileManagement.markdownDirectory.isEmpty {
+            errors.append("File management markdown directory cannot be empty")
+        }
+        
+        if config.fileManagement.logDirectory.isEmpty {
+            errors.append("File management log directory cannot be empty")
+        }
+        
+        if config.fileManagement.tempDirectory.isEmpty {
+            errors.append("File management temp directory cannot be empty")
         }
         
         // Validate logging configuration
-        if config.logging.enableFile && config.logging.logDirectory.isEmpty {
-            errors.append("Log directory must be specified when file logging is enabled")
+        if config.logging.enabled {
+            if config.logging.outputFolder.isEmpty {
+                errors.append("Log output folder cannot be empty when logging is enabled")
+            }
+            
+            if config.logging.maxLogFileSize.isEmpty {
+                errors.append("Log max file size cannot be empty when logging is enabled")
+            }
+            
+            if config.logging.logFileNaming.maxFileNameLength <= 0 {
+                errors.append("Log max file name length must be positive")
+            }
+            
+            if config.logging.logFileNaming.pattern.isEmpty {
+                errors.append("Log file naming pattern cannot be empty")
+            }
+            
+            if config.logging.logFileNaming.timestampFormat.isEmpty {
+                errors.append("Log timestamp format cannot be empty")
+            }
         }
         
         // If there are validation errors, throw them

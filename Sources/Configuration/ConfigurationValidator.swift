@@ -113,25 +113,33 @@ public struct ConfigurationValidator {
         }
         
         // Validate header region
-        if config.headerRegion.lowerBound < 0.0 || config.headerRegion.upperBound > 1.0 {
-            throw ConfigurationValidationError.invalidHeaderRegion(config.headerRegion)
+        if config.headerRegion.count == 2 {
+            if config.headerRegion[0] < 0.0 || config.headerRegion[1] > 1.0 {
+                let range = config.headerRegion[0]...config.headerRegion[1]
+                throw ConfigurationValidationError.invalidHeaderRegion(range)
+            }
         }
         
         // Validate footer region
-        if config.footerRegion.lowerBound < 0.0 || config.footerRegion.upperBound > 1.0 {
-            throw ConfigurationValidationError.invalidFooterRegion(config.footerRegion)
+        if config.footerRegion.count == 2 {
+            if config.footerRegion[0] < 0.0 || config.footerRegion[1] > 1.0 {
+                let range = config.footerRegion[0]...config.footerRegion[1]
+                throw ConfigurationValidationError.invalidFooterRegion(range)
+            }
         }
         
         // Validate merge distance threshold
-        if config.mergeDistanceThreshold <= 0.0 {
+        if config.mergeDistanceThreshold < 0.0 {
             throw ConfigurationValidationError.invalidMaxMergeDistance(config.mergeDistanceThreshold)
         }
         
         // Validate that header and footer regions don't overlap
-        if config.headerRegion.overlaps(config.footerRegion) {
-            throw ConfigurationValidationError.conflictingConfigurations([
-                "Header region (\(config.headerRegion)) overlaps with footer region (\(config.footerRegion))"
-            ])
+        if config.headerRegion.count == 2 && config.footerRegion.count == 2 {
+            if config.headerRegion[1] > config.footerRegion[0] {
+                throw ConfigurationValidationError.conflictingConfigurations([
+                    "Header region (\(config.headerRegion)) overlaps with footer region (\(config.footerRegion))"
+                ])
+            }
         }
     }
     
@@ -164,8 +172,8 @@ public struct ConfigurationValidator {
         // Validate processing parameters
         try validateProcessingParameters(config.parameters)
         
-        // Validate prompts
-        try validatePromptConfig(config.prompts)
+        // Validate prompt templates
+        try validatePromptTemplates(config.promptTemplates)
     }
     
     private func validateModelConfig(_ config: ModelConfig) throws {
@@ -176,13 +184,13 @@ public struct ConfigurationValidator {
             ])
         }
         
-        // Validate model path if provided
-        if let modelPath = config.modelPath, !modelPath.isEmpty {
+        // Validate local path if provided
+        if !config.localPath.isEmpty && !config.localPath.hasPrefix("~") {
             // Check if file exists and is accessible
-            let url = URL(fileURLWithPath: modelPath)
+            let url = URL(fileURLWithPath: config.localPath)
             if !FileManager.default.fileExists(atPath: url.path) {
                 throw ConfigurationValidationError.conflictingConfigurations([
-                    "Model file not found at path: \(modelPath)"
+                    "Model file not found at path: \(config.localPath)"
                 ])
             }
         }
@@ -212,52 +220,88 @@ public struct ConfigurationValidator {
         }
     }
     
-    private func validatePromptConfig(_ config: PromptConfig) throws {
-        // Validate that prompts are not empty
+    private func validatePromptTemplates(_ config: PromptTemplates) throws {
+        // Validate default language
+        if config.defaultLanguage.isEmpty {
+            throw ConfigurationValidationError.conflictingConfigurations([
+                "Default language cannot be empty"
+            ])
+        }
+        
+        // Validate fallback language
+        if config.fallbackLanguage.isEmpty {
+            throw ConfigurationValidationError.conflictingConfigurations([
+                "Fallback language cannot be empty"
+            ])
+        }
+        
+        // Validate that at least one language is configured
+        if config.languages.isEmpty {
+            throw ConfigurationValidationError.conflictingConfigurations([
+                "At least one language must be configured"
+            ])
+        }
+        
+        // Validate that default language exists in languages
+        if !config.languages.keys.contains(config.defaultLanguage) {
+            throw ConfigurationValidationError.conflictingConfigurations([
+                "Default language '\(config.defaultLanguage)' not found in configured languages"
+            ])
+        }
+        
+        // Validate each language configuration
+        for (language, prompts) in config.languages {
+            try validateLanguagePrompts(prompts, for: language)
+        }
+    }
+    
+    private func validateLanguagePrompts(_ config: LanguagePrompts, for language: String) throws {
+        // Validate system prompt
         if config.systemPrompt.isEmpty {
             throw ConfigurationValidationError.conflictingConfigurations([
-                "System prompt cannot be empty"
+                "System prompt for language '\(language)' cannot be empty"
             ])
         }
         
-        if config.optimizationPrompt.isEmpty {
+        // Validate markdown optimization prompt
+        if config.markdownOptimizationPrompt.isEmpty {
             throw ConfigurationValidationError.conflictingConfigurations([
-                "Optimization prompt cannot be empty"
-            ])
-        }
-        
-        if config.languagePrompt.isEmpty {
-            throw ConfigurationValidationError.conflictingConfigurations([
-                "Language prompt cannot be empty"
+                "Markdown optimization prompt for language '\(language)' cannot be empty"
             ])
         }
     }
     
     private func validateLoggingConfig(_ config: LoggingConfig) throws {
+        // Only validate if logging is enabled
+        guard config.enabled else { return }
+        
         // Validate log level
         let validLevels = ["debug", "info", "warning", "error", "critical"]
         if !validLevels.contains(config.level.lowercased()) {
             throw ConfigurationValidationError.invalidLogLevel(config.level)
         }
         
+        // Validate output folder
+        if config.outputFolder.isEmpty {
+            throw ConfigurationValidationError.invalidOutputDirectory(config.outputFolder)
+        }
+        
         // Validate max file size
-        if config.maxFileSize <= 0 {
-            throw ConfigurationValidationError.invalidMaxFileSize(config.maxFileSize)
+        if config.maxLogFileSize.isEmpty {
+            throw ConfigurationValidationError.invalidMaxFileSize(0)
         }
         
-        // Validate max files
-        if config.maxFiles <= 0 {
-            throw ConfigurationValidationError.invalidMaxFiles(config.maxFiles)
+        // Validate log file naming
+        if config.logFileNaming.pattern.isEmpty {
+            throw ConfigurationValidationError.invalidFilenamePattern(config.logFileNaming.pattern)
         }
         
-        // Validate log directory
-        if config.logDirectory.isEmpty {
-            throw ConfigurationValidationError.invalidOutputDirectory(config.logDirectory)
+        if config.logFileNaming.timestampFormat.isEmpty {
+            throw ConfigurationValidationError.invalidFilenamePattern("Empty timestamp format")
         }
         
-        // Validate log filename
-        if config.logFileName.isEmpty {
-            throw ConfigurationValidationError.invalidFilenamePattern(config.logFileName)
+        if config.logFileNaming.maxFileNameLength <= 0 {
+            throw ConfigurationValidationError.invalidMaxFiles(config.logFileNaming.maxFileNameLength)
         }
     }
     
@@ -270,12 +314,12 @@ public struct ConfigurationValidator {
         }
         
         // Check if file logging is enabled but log files are disabled
-        if config.logging.enableFile && !config.output.createLogFiles {
+        if config.logging.enabled && config.logging.enableConsoleOutput && !config.output.createLogFiles {
             conflicts.append("File logging is enabled but log file creation is disabled")
         }
         
         // Check if output directory and log directory are the same
-        if config.output.outputDirectory == config.logging.logDirectory {
+        if config.output.outputDirectory == config.logging.outputFolder {
             conflicts.append("Output directory and log directory should be different to avoid conflicts")
         }
         
