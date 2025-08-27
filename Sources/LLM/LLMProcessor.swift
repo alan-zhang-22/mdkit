@@ -16,6 +16,10 @@ import Logging
 public protocol LLMProcessing {
     func optimizeMarkdown(_ markdown: String, documentContext: String, elements: String) async throws -> String
     func analyzeDocumentStructure(_ elements: String) async throws -> String
+    func optimizeTable(_ tableContent: String) async throws -> String
+    func optimizeList(_ listContent: String) async throws -> String
+    func optimizeHeaders(_ headerContent: String) async throws -> String
+    func getTechnicalStandardPrompt(for content: String) -> String
 }
 
 // MARK: - LLM Processor Implementation
@@ -26,6 +30,7 @@ public class LLMProcessor: LLMProcessing {
     private let config: MDKitConfig
     private let client: LLMClient
     private let languageDetector: LanguageDetecting
+    private let promptTemplates: PromptTemplating
     private let logger: Logger
     
     // MARK: - Initialization
@@ -38,6 +43,7 @@ public class LLMProcessor: LLMProcessing {
         self.config = config
         self.client = client
         self.languageDetector = languageDetector
+        self.promptTemplates = PromptTemplates.create(from: config)
         self.logger = Logger(label: "mdkit.llmprocessor")
     }
     
@@ -46,28 +52,27 @@ public class LLMProcessor: LLMProcessing {
     public func optimizeMarkdown(_ markdown: String, documentContext: String, elements: String) async throws -> String {
         logger.info("Starting markdown optimization")
         
-        let prompt = """
-        You are an expert at optimizing Markdown documents. Please analyze and improve the following markdown:
+        // Detect language from the markdown content
+        let detectedLanguage = languageDetector.detectLanguage(from: markdown)
+        let (_, languageConfidence) = languageDetector.detectLanguageWithConfidence(from: markdown)
         
-        MARKDOWN TO OPTIMIZE:
-        \(markdown)
+        logger.info("Detected language: \(detectedLanguage) with confidence: \(String(format: "%.2f", languageConfidence))")
         
-        DOCUMENT CONTEXT:
-        \(documentContext)
+        // Get language-specific prompt template
+        let prompt = promptTemplates.getMarkdownOptimizationPrompt(
+            for: detectedLanguage,
+            documentTitle: "Document", // TODO: Extract from context
+            pageCount: 1, // TODO: Extract from context
+            elementCount: elements.components(separatedBy: "\n").count,
+            documentContext: documentContext,
+            detectedLanguage: detectedLanguage,
+            languageConfidence: languageConfidence,
+            markdown: markdown
+        )
         
-        DOCUMENT ELEMENTS:
-        \(elements)
-        
-        Please provide an optimized version that:
-        1. Maintains the original structure and meaning
-        2. Improves formatting and readability
-        3. Fixes any markdown syntax issues
-        4. Enhances the overall document quality
-        
-        Return only the optimized markdown, no explanations.
-        """
-        
+        logger.debug("Using prompt template for language: \(detectedLanguage)")
         logger.debug("Sending optimization prompt to LLM")
+        
         let result = try await client.generateText(from: prompt)
         logger.info("Markdown optimization completed successfully")
         
@@ -77,26 +82,93 @@ public class LLMProcessor: LLMProcessing {
     public func analyzeDocumentStructure(_ elements: String) async throws -> String {
         logger.info("Starting document structure analysis")
         
-        let prompt = """
-        Analyze the following document elements and provide a structural analysis:
+        // Detect language from the elements
+        let detectedLanguage = languageDetector.detectLanguage(from: elements)
+        logger.info("Detected language for structure analysis: \(detectedLanguage)")
         
-        ELEMENTS:
-        \(elements)
+        // Get language-specific prompt template
+        let prompt = promptTemplates.getStructureAnalysisPrompt(
+            for: detectedLanguage,
+            documentType: "Technical Document", // TODO: Extract from content analysis
+            elementCount: elements.components(separatedBy: "\n").count,
+            detectedLanguage: detectedLanguage,
+            elementDescriptions: elements
+        )
         
-        Please provide:
-        1. Document type identification
-        2. Main sections and subsections
-        3. Content organization patterns
-        4. Recommendations for markdown structure
-        
-        Return a structured analysis in markdown format.
-        """
-        
+        logger.debug("Using structure analysis prompt template for language: \(detectedLanguage)")
         logger.debug("Sending structure analysis prompt to LLM")
+        
         let result = try await client.generateText(from: prompt)
         logger.info("Document structure analysis completed successfully")
         
         return result
+    }
+    
+    // MARK: - Additional Optimization Methods
+    
+    /// Optimizes table structure using language-specific prompts
+    /// - Parameter tableContent: Table content to optimize
+    /// - Returns: Optimized table structure
+    public func optimizeTable(_ tableContent: String) async throws -> String {
+        logger.info("Starting table optimization")
+        
+        let detectedLanguage = languageDetector.detectLanguage(from: tableContent)
+        let prompt = promptTemplates.getTableOptimizationPrompt(
+            for: detectedLanguage,
+            tableContent: tableContent
+        )
+        
+        logger.debug("Using table optimization prompt for language: \(detectedLanguage)")
+        let result = try await client.generateText(from: prompt)
+        logger.info("Table optimization completed successfully")
+        
+        return result
+    }
+    
+    /// Optimizes list structure using language-specific prompts
+    /// - Parameter listContent: List content to optimize
+    /// - Returns: Optimized list structure
+    public func optimizeList(_ listContent: String) async throws -> String {
+        logger.info("Starting list optimization")
+        
+        let detectedLanguage = languageDetector.detectLanguage(from: listContent)
+        let prompt = promptTemplates.getListOptimizationPrompt(
+            for: detectedLanguage,
+            listContent: listContent
+        )
+        
+        logger.debug("Using list optimization prompt for language: \(detectedLanguage)")
+        let result = try await client.generateText(from: prompt)
+        logger.info("List optimization completed successfully")
+        
+        return result
+    }
+    
+    /// Optimizes header structure using language-specific prompts
+    /// - Parameter headerContent: Header content to optimize
+    /// - Returns: Optimized header structure
+    public func optimizeHeaders(_ headerContent: String) async throws -> String {
+        logger.info("Starting header optimization")
+        
+        let detectedLanguage = languageDetector.detectLanguage(from: headerContent)
+        let prompt = promptTemplates.getHeaderOptimizationPrompt(
+            for: detectedLanguage,
+            headerContent: headerContent
+        )
+        
+        logger.debug("Using header optimization prompt for language: \(detectedLanguage)")
+        let result = try await client.generateText(from: prompt)
+        logger.info("Header optimization completed successfully")
+        
+        return result
+    }
+    
+    /// Gets technical standard prompt for the specified language
+    /// - Parameter content: Content to determine language from
+    /// - Returns: Technical standard prompt
+    public func getTechnicalStandardPrompt(for content: String) -> String {
+        let detectedLanguage = languageDetector.detectLanguage(from: content)
+        return promptTemplates.getTechnicalStandardPrompt(for: detectedLanguage)
     }
     
     // MARK: - Factory Method
@@ -139,10 +211,15 @@ public class LLMProcessor: LLMProcessing {
         let logger = Logger(label: "mdkit.llmprocessor.language")
         logger.debug("Creating language detector")
         
-        // Implementation will use Natural Language framework
-        // For now, return a mock detector - this will be enhanced later
-        logger.info("Using mock language detector (real implementation pending)")
-        return MockLanguageDetector()
+        // Create real language detector with configuration
+        let minimumTextLength = config.processing.languageDetection?.minimumTextLength ?? 10
+        let confidenceThreshold = config.processing.languageDetection?.confidenceThreshold ?? 0.6
+        
+        logger.info("Creating real language detector with minLength: \(minimumTextLength), confidenceThreshold: \(confidenceThreshold)")
+        return LanguageDetector(
+            minimumTextLength: minimumTextLength,
+            confidenceThreshold: confidenceThreshold
+        )
     }
 }
 

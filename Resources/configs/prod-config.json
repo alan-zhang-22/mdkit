@@ -9,7 +9,16 @@
     "isMergeDistanceNormalized": true,
     "horizontalMergeThreshold": 0.15,
     "isHorizontalMergeThresholdNormalized": true,
-    "enableLLMOptimization": true
+    "enableLLMOptimization": true,
+    "pdfImageScaleFactor": 2.0,
+    "enableImageEnhancement": true,
+    "languageDetection": {
+      "minimumTextLength": 15,
+      "confidenceThreshold": 0.7,
+      "enableMultilingualDetection": true,
+      "maxLanguages": 3,
+      "fallbackLanguage": "en"
+    }
   },
   "output": {
     "outputDirectory": "./output",

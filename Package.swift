@@ -145,6 +145,12 @@ let package = Package(
             dependencies: ["mdkitFileManagement"],
             path: "Tests/FileManagementTests"
         ),
+        
+        .testTarget(
+            name: "mdkitLLMTests",
+            dependencies: ["mdkitLLM"],
+            path: "Tests/LLMTests"
+        ),
 
         .testTarget(
             name: "mdkitIntegrationTests",

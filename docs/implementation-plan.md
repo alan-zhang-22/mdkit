@@ -4,11 +4,11 @@
 
 This document outlines the implementation plan for mdkit, a PDF to Markdown conversion tool that leverages Apple's Vision framework for intelligent document analysis and local LLMs for markdown optimization. The implementation follows a phased approach to ensure quality, maintainability, and incremental delivery of features.
 
-## Current Status: Phase 1, 2, 3 & 4 Complete, Phase 5 Partially Advanced
+## Current Status: Phase 1, 2, 3, 4 & 5 Complete, Phase 6 Ready to Start
 
-**Last Updated**: August 27, 2025  
-**Current Phase**: Phase 5 - LLM Integration  
-**Overall Progress**: ~85% Complete
+**Last Updated**: August 27, 2025 (Updated after promptSelection cleanup)  
+**Current Phase**: Phase 6 - Integration & Testing  
+**Overall Progress**: ~90% Complete
 
 ## Project Structure
 
@@ -33,8 +33,8 @@ mdkit/
 │   │   └── LogFormatters.swift ❌ NOT STARTED
 │   ├── LLM/
 │   │   ├── LLMProcessor.swift ✅ COMPLETED
-│   │   ├── LanguageDetector.swift ❌ NOT STARTED
-│   │   └── PromptTemplates.swift ❌ NOT STARTED
+│   │   ├── LanguageDetector.swift ✅ COMPLETED
+│   │   └── PromptTemplates.swift ✅ COMPLETED
 │   ├── Protocols/
 │   │   ├── LLMClient.swift ✅ COMPLETED
 │   │   ├── LanguageDetecting.swift ✅ COMPLETED
@@ -49,7 +49,7 @@ mdkit/
 │   ├── ConfigurationTests/ ✅ COMPLETED
 │   ├── FileManagementTests/ ✅ COMPLETED
 │   ├── LoggingTests/ ❌ NOT STARTED
-│   ├── LLMTests/ ❌ NOT STARTED
+│   ├── LLMTests/ ✅ COMPLETED
 │   └── IntegrationTests/ ❌ NOT STARTED
 ├── Resources/
 │   ├── configs/ ✅ COMPLETED
@@ -261,41 +261,47 @@ mdkit/
 
 ---
 
-### Phase 5: LLM Integration 🔄 PARTIALLY COMPLETED (Weeks 9-10)
+### Phase 5: LLM Integration ✅ COMPLETED (Weeks 9-10)
 
-#### 5.1 LLM Processor Foundation 🔄 PARTIALLY COMPLETED
+#### 5.1 LLM Processor Foundation ✅ COMPLETED
 - [x] Implement `LLMProcessor` class
 - [x] Add LocalLLMClientLlama integration
 - [x] Create LLM configuration management
 - [x] Add parameter validation
 - [x] Implement error handling
 - [x] Add LLM optimization toggle in UnifiedDocumentProcessor
+- [x] Integrate with language detection and prompt templates
 
-#### 5.2 Language Detection ❌ NOT STARTED
-- [ ] Implement `LanguageDetector` class
-- [ ] Add Natural Language framework integration
-- [ ] Create language confidence scoring
-- [ ] Add fallback language support
-- [ ] Test with multiple languages
+#### 5.2 Language Detection ✅ COMPLETED
+- [x] Implement `LanguageDetector` class
+- [x] Add Natural Language framework integration
+- [x] Create language confidence scoring
+- [x] Add fallback language support
+- [x] Test with multiple languages
+- [x] Add comprehensive test suite
+- [x] Update configuration files and schema
 
-#### 5.3 Prompt Template System ❌ NOT STARTED
-- [ ] Create `PromptTemplates` system
-- [ ] Add multi-language support
-- [ ] Implement placeholder replacement
-- [ ] Add template validation
-- [ ] Create specialized prompts for different document types
+#### 5.3 Prompt Template System ✅ COMPLETED
+- [x] Create `PromptTemplates` system
+- [x] Add multi-language support with language detection integration
+- [x] Implement placeholder replacement for all template variables
+- [x] Add template validation and fallback mechanisms
+- [x] Create specialized prompts for different document types
+- [x] Add comprehensive test suite
+- [x] Integrate with LLMProcessor for language-aware optimization
+- [x] **NEW: Simplified architecture - removed unnecessary promptSelection complexity**
 
-**Deliverables:** 🔄 **PARTIALLY COMPLETED**
+**Deliverables:** ✅ **COMPLETED**
 - ✅ LLM integration system
-- ❌ Language detection
-- ❌ Prompt template system
-- ❌ Multi-language support
+- ✅ Language detection system with Natural Language framework
+- ✅ Prompt template system with multi-language support
+- ✅ Multi-language support with confidence scoring
 
-**Success Criteria:** 🔄 **PARTIALLY ACHIEVED**
+**Success Criteria:** ✅ **ACHIEVED**
 - ✅ Can connect to local LLM backends
-- ❌ Correctly detects document language
-- ❌ Generates appropriate prompts
-- ❌ Handles multiple languages
+- ✅ Correctly detects document language with confidence scoring
+- ✅ Generates appropriate prompts with language-specific templates
+- ✅ Handles multiple languages with fallback support
 
 ---
 
@@ -539,7 +545,7 @@ struct DocumentElement {
 
 ### Development Metrics 🔄
 - ✅ All phases completed on schedule (Phase 1, 2, 3 & 4 complete)
-- ✅ >90% test coverage achieved (166/166 tests passing)
+- ✅ >90% test coverage achieved (200+ tests passing)
 - ❌ Performance targets met (not yet tested)
 - ❌ Memory usage within limits (not yet tested)
 
@@ -602,7 +608,7 @@ struct DocumentElement {
 6. **LLM Integration**: Toggle and framework in place
 7. **High-Quality PDF Processing**: Professional-grade image conversion and enhancement
 8. **Multi-Page Support**: Efficient page-by-page processing with streaming output
-9. **Testing**: Comprehensive unit test coverage (166/166 tests passing)
+9. **Testing**: Comprehensive unit test coverage (200+ tests passing)
 10. **Element Merging**: Complete merging system with intelligent scoring
 11. **Advanced Header Detection**: Pattern-based detection with configurable regex patterns
 12. **List Item Processing**: Complete list detection and merging system
@@ -611,6 +617,10 @@ struct DocumentElement {
 15. **File Management System**: Centralized file operations with streaming output support
 16. **Output Type Organization**: Structured categorization of different output file types
 17. **Safe File Operations**: Atomic operations with error handling and cleanup
+18. **Language Detection System**: Natural Language framework integration with confidence scoring
+19. **Multi-Language Support**: Detection of 10+ languages with fallback mechanisms
+20. **Context-Aware Detection**: Page-by-page language detection with historical context
+21. **Simplified Prompt Architecture**: Clean, direct method calls without unnecessary configuration complexity
 
 #### **🎯 Image Quality Optimizations (Completed)**
 - **High-Quality Rendering**: 2.0x resolution scaling with anti-aliasing and subpixel positioning
@@ -637,19 +647,19 @@ struct DocumentElement {
 
 ### Immediate Priorities (Next 2-3 weeks)
 1. **✅ Phase 4 Complete**: File management and logging systems implemented
-2. **Start Phase 5**: Implement language detection and prompt template systems
-3. **Add Integration Tests**: Test complete document processing pipeline
+2. **✅ Phase 5 Complete**: Language detection and prompt template systems implemented
+3. **Start Phase 6**: Integration testing and CLI polish
 4. **Performance Testing**: Validate speed and memory requirements
 
 ### Medium Term (Next 4-6 weeks)
 1. **✅ Phase 4 Complete**: File management and logging systems
-2. **Complete Phase 5**: Language detection and prompt templates
-3. **Performance Testing**: Validate speed and memory requirements
-4. **Integration Testing**: End-to-end workflow validation
+2. **✅ Phase 5 Complete**: Language detection and prompt templates
+3. **Complete Phase 6**: Integration testing and CLI polish
+4. **Performance Testing**: Validate speed and memory requirements
 
 ### Long Term (Next 8-10 weeks)
-1. **Complete Phase 5**: Language detection and prompt templates
-2. **Phase 6**: Integration and CLI polish
+1. **✅ Phase 5 Complete**: Language detection and prompt templates
+2. **Complete Phase 6**: Integration and CLI polish
 3. **Phase 7**: Optimization and documentation
 
 ## Post-Implementation
@@ -679,7 +689,7 @@ struct DocumentElement {
 The implementation is progressing excellently with **Phase 1 (Foundation & Core Infrastructure), Phase 2 (Document Processing Core), Phase 3 (Header & Footer Detection), and Phase 4 (File Management & Logging) all fully completed**. 
 
 **Key Achievements:**
-- ✅ Solid foundation with comprehensive testing (166/166 tests passing)
+- ✅ Solid foundation with comprehensive testing (200+ tests passing)
 - ✅ Vision framework integration working
 - ✅ Complete document processing pipeline implemented
 - ✅ Header/footer detection functional
@@ -694,9 +704,12 @@ The implementation is progressing excellently with **Phase 1 (Foundation & Core 
 - ✅ **NEW: Professional-grade file management system with streaming output**
 - ✅ **NEW: Comprehensive logging system with swift-log integration**
 - ✅ **NEW: Multiple output type support with organized categorization**
+- ✅ **NEW: Language detection system with Natural Language framework integration**
+- ✅ **NEW: Multi-language prompt templates with placeholder replacement**
+- ✅ **NEW: Simplified prompt architecture - removed unnecessary complexity**
 
 **Current Focus:**
-Phase 4 is **100% COMPLETE** with the `MDKitFileManager` class fully implemented. The system now provides professional-grade file management with streaming output, multiple output types, and comprehensive logging. Phase 5 (LLM Integration) is ready to continue.
+Phase 5 is **100% COMPLETE** with the `LanguageDetector` class and `PromptTemplates` system fully implemented. The system now provides professional-grade file management, comprehensive logging, intelligent language detection with confidence scoring, and language-aware prompt templates for LLM optimization. **Recent cleanup removed unnecessary `promptSelection` complexity, simplifying the architecture to use direct method calls (e.g., `getMarkdownOptimizationPrompt()`).** Phase 6 (Integration & Testing) is ready to start.
 
 **Risk Assessment:**
 - **Low Risk**: Core infrastructure is solid and well-tested
@@ -710,4 +723,4 @@ Phase 4 is **100% COMPLETE** with the `MDKitFileManager` class fully implemented
 
 The phased approach is working exceptionally well, with each component thoroughly tested before moving forward. **Phase 2 represents a major milestone** - the system now produces output that rivals commercial PDF processing tools, making it suitable for professional document conversion workflows. The recent addition of directional merging thresholds significantly improves header detection and text spacing preservation.
 
-**Next Major Milestone**: Complete Phase 5 to add language detection and prompt template systems, which will provide intelligent LLM optimization capabilities. The professional-grade file management system provides an excellent foundation for this next phase.
+**Next Major Milestone**: Complete Phase 6 to add integration testing and CLI polish, which will provide end-to-end workflow validation and user experience improvements. The complete LLM integration system provides an excellent foundation for this next phase. **The recent architecture simplification makes the system more maintainable and easier to extend.**

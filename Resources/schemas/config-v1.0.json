@@ -41,19 +41,88 @@
           "default": true,
           "description": "Whether to merge split headers and list items"
         },
-        "maxMergeDistance": {
+        "mergeDistanceThreshold": {
           "type": "number",
           "minimum": 0.0,
-          "default": 75.0,
-          "description": "Maximum distance for merging elements (in points)"
+          "maximum": 1.0,
+          "default": 0.02,
+          "description": "Distance threshold for merging elements (0.0 to 1.0)"
+        },
+        "isMergeDistanceNormalized": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether merge distance is normalized (0.0 to 1.0) or absolute (in points)"
+        },
+        "horizontalMergeThreshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.15,
+          "description": "Horizontal distance threshold for merging headers (0.0 to 1.0)"
+        },
+        "isHorizontalMergeThresholdNormalized": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether horizontal merge threshold is normalized (0.0 to 1.0) or absolute (in points)"
         },
         "enableLLMOptimization": {
           "type": "boolean",
           "default": true,
           "description": "Whether to use LLM for content optimization"
+        },
+        "pdfImageScaleFactor": {
+          "type": "number",
+          "minimum": 1.0,
+          "maximum": 3.0,
+          "default": 2.0,
+          "description": "PDF to image conversion scale factor (1.0 to 3.0)"
+        },
+        "enableImageEnhancement": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to enable image enhancement for better OCR quality"
+        },
+        "languageDetection": {
+          "type": "object",
+          "description": "Language detection configuration",
+          "properties": {
+            "minimumTextLength": {
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 100,
+              "default": 10,
+              "description": "Minimum text length required for reliable language detection"
+            },
+            "confidenceThreshold": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0,
+              "default": 0.6,
+              "description": "Confidence threshold for language detection (0.0 to 1.0)"
+            },
+            "enableMultilingualDetection": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to detect multiple languages in mixed content"
+            },
+            "maxLanguages": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 3,
+              "description": "Maximum number of languages to detect"
+            },
+            "fallbackLanguage": {
+              "type": "string",
+              "pattern": "^[a-z]{2}$",
+              "default": "en",
+              "description": "Fallback language code (ISO 639-1 format)"
+            }
+          },
+          "required": ["minimumTextLength", "confidenceThreshold", "enableMultilingualDetection", "maxLanguages", "fallbackLanguage"]
         }
       },
-      "required": ["overlapThreshold", "enableHeaderFooterDetection", "headerRegion", "footerRegion", "enableElementMerging", "maxMergeDistance", "enableLLMOptimization"]
+      "required": ["overlapThreshold", "enableHeaderFooterDetection", "headerRegion", "footerRegion", "enableElementMerging", "mergeDistanceThreshold", "isMergeDistanceNormalized", "horizontalMergeThreshold", "isHorizontalMergeThresholdNormalized", "enableLLMOptimization", "pdfImageScaleFactor", "enableImageEnhancement"]
     },
     "output": {
       "type": "object",

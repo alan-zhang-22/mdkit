@@ -71,6 +71,7 @@ public struct ProcessingConfig: Codable {
     public let enableLLMOptimization: Bool
     public let pdfImageScaleFactor: Double
     public let enableImageEnhancement: Bool
+    public let languageDetection: LanguageDetectionConfig?
     
     public init(
         overlapThreshold: Double = 0.15,
@@ -84,7 +85,8 @@ public struct ProcessingConfig: Codable {
         isHorizontalMergeThresholdNormalized: Bool = true,
         enableLLMOptimization: Bool = true,
         pdfImageScaleFactor: Double = 2.0,
-        enableImageEnhancement: Bool = true
+        enableImageEnhancement: Bool = true,
+        languageDetection: LanguageDetectionConfig? = nil
     ) {
         self.overlapThreshold = overlapThreshold
         self.enableHeaderFooterDetection = enableHeaderFooterDetection
@@ -98,6 +100,31 @@ public struct ProcessingConfig: Codable {
         self.enableLLMOptimization = enableLLMOptimization
         self.pdfImageScaleFactor = pdfImageScaleFactor
         self.enableImageEnhancement = enableImageEnhancement
+        self.languageDetection = languageDetection
+    }
+}
+
+// MARK: - Language Detection Configuration
+
+public struct LanguageDetectionConfig: Codable {
+    public let minimumTextLength: Int
+    public let confidenceThreshold: Double
+    public let enableMultilingualDetection: Bool
+    public let maxLanguages: Int
+    public let fallbackLanguage: String
+    
+    public init(
+        minimumTextLength: Int = 10,
+        confidenceThreshold: Double = 0.6,
+        enableMultilingualDetection: Bool = true,
+        maxLanguages: Int = 3,
+        fallbackLanguage: String = "en"
+    ) {
+        self.minimumTextLength = minimumTextLength
+        self.confidenceThreshold = confidenceThreshold
+        self.enableMultilingualDetection = enableMultilingualDetection
+        self.maxLanguages = maxLanguages
+        self.fallbackLanguage = fallbackLanguage
     }
 }
 
@@ -312,7 +339,8 @@ public struct PromptTemplates: Codable {
             )
         ],
         defaultLanguage: String = "en",
-        fallbackLanguage: String = "en"
+        fallbackLanguage: String = "en",
+        promptSelection: PromptSelectionConfig()
     ) {
         self.languages = languages
         self.defaultLanguage = defaultLanguage
@@ -347,6 +375,8 @@ public struct LanguagePrompts: Codable {
         self.technicalStandardPrompt = technicalStandardPrompt
     }
 }
+
+
 
 // MARK: - Header Detection Configuration
 
@@ -644,6 +674,7 @@ public struct MarkdownGenerationConfig: Codable {
     public let listFormat: String
     public let tableFormat: String
     public let codeBlockFormat: String
+
     
     public init(
         preservePageBreaks: Bool = false,
@@ -651,7 +682,8 @@ public struct MarkdownGenerationConfig: Codable {
         headerFormat: String = "atx",
         listFormat: String = "unordered",
         tableFormat: String = "standard",
-        codeBlockFormat: String = "fenced"
+        codeBlockFormat: String = "fenced",
+
     ) {
         self.preservePageBreaks = preservePageBreaks
         self.extractImages = extractImages
@@ -659,6 +691,7 @@ public struct MarkdownGenerationConfig: Codable {
         self.listFormat = listFormat
         self.tableFormat = tableFormat
         self.codeBlockFormat = codeBlockFormat
+
     }
 }
 

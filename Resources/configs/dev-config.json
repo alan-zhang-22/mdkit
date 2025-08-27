@@ -11,7 +11,14 @@
     "isHorizontalMergeThresholdNormalized": true,
     "enableLLMOptimization": true,
     "pdfImageScaleFactor": 2.0,
-    "enableImageEnhancement": true
+    "enableImageEnhancement": true,
+    "languageDetection": {
+      "minimumTextLength": 10,
+      "confidenceThreshold": 0.6,
+      "enableMultilingualDetection": true,
+      "maxLanguages": 3,
+      "fallbackLanguage": "en"
+    }
   },
   "output": {
     "outputDirectory": "./dev-output",
@@ -23,7 +30,7 @@
       "useATXHeaders": true,
       "addTableOfContents": true,
       "preserveFormatting": true,
-      "listMarkerStyle": "-"
+            "listMarkerStyle": "-"
     }
   },
   "llm": {
