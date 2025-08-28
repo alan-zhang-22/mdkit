@@ -339,8 +339,7 @@ public struct PromptTemplates: Codable {
             )
         ],
         defaultLanguage: String = "en",
-        fallbackLanguage: String = "en",
-        promptSelection: PromptSelectionConfig()
+        fallbackLanguage: String = "en"
     ) {
         self.languages = languages
         self.defaultLanguage = defaultLanguage

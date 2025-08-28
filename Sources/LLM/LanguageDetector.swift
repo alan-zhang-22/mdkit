@@ -8,6 +8,8 @@
 import Foundation
 import NaturalLanguage
 import Logging
+import mdkitConfiguration
+import mdkitProtocols
 
 // MARK: - Language Detector Implementation
 

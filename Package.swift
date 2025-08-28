@@ -64,7 +64,8 @@ let package = Package(
             ],
             path: "mdkit",
             swiftSettings: [
-                .interoperabilityMode(.Cxx)
+                .interoperabilityMode(.Cxx),
+                .define("SWIFT_PACKAGE")
             ]
         ),
         
@@ -94,7 +95,10 @@ let package = Package(
                 "mdkitConfiguration",
                 "mdkitLogging"
             ],
-            path: "Sources/Core"
+            path: "Sources/Core",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         
         // MARK: - File Management (depends on Configuration and Logging)
@@ -107,18 +111,20 @@ let package = Package(
             path: "Sources/FileManagement"
         ),
         
-        // MARK: - LLM (depends on Configuration, Logging, and LocalLLMClient)
+        // MARK: - LLM (depends on Configuration, Logging, Protocols, and LocalLLMClient)
         .target(
             name: "mdkitLLM",
             dependencies: [
                 "mdkitConfiguration",
                 "mdkitLogging",
+                "mdkitProtocols",
                 .product(name: "LocalLLMClient", package: "LocalLLMClient"),
                 .product(name: "LocalLLMClientLlama", package: "LocalLLMClient")
             ],
             path: "Sources/LLM",
             swiftSettings: [
-                .interoperabilityMode(.Cxx)
+                .interoperabilityMode(.Cxx),
+                .define("SWIFT_PACKAGE")
             ]
         ),
         
@@ -132,7 +138,10 @@ let package = Package(
         .testTarget(
             name: "mdkitCoreTests",
             dependencies: ["mdkitCore"],
-            path: "Tests/CoreTests"
+            path: "Tests/CoreTests",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         .testTarget(
             name: "mdkitConfigurationTests",
@@ -149,7 +158,10 @@ let package = Package(
         .testTarget(
             name: "mdkitLLMTests",
             dependencies: ["mdkitLLM"],
-            path: "Tests/LLMTests"
+            path: "Tests/LLMTests",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         ),
 
         .testTarget(
@@ -161,7 +173,10 @@ let package = Package(
                 "mdkitLogging",
                 "mdkitLLM"
             ],
-            path: "Tests/IntegrationTests"
+            path: "Tests/IntegrationTests",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
         )
     ]
 )

@@ -6,6 +6,7 @@ import PDFKit
 import AppKit
 import CoreImage
 import mdkitConfiguration
+import mdkitFileManagement
 
 // MARK: - Document Processing Error
 
@@ -76,14 +77,22 @@ public class UnifiedDocumentProcessor {
     private let logger: Logger
     private let overlapDetector: SimpleOverlapDetector
     private let markdownGenerator: MarkdownGenerator
+    private let fileManager: FileManaging
     
     // MARK: - Initialization
     
-    public init(config: MDKitConfig) {
+    public init(config: MDKitConfig, fileManager: FileManaging) {
         self.config = config
+        self.fileManager = fileManager
         self.logger = Logger(label: "UnifiedDocumentProcessor")
         self.overlapDetector = SimpleOverlapDetector(config: config)
         self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
+    }
+    
+    // Convenience initializer that creates a default FileManager
+    public convenience init(config: MDKitConfig) {
+        let defaultFileManager = MDKitFileManager(config: config.fileManagement)
+        self.init(config: config, fileManager: defaultFileManager)
     }
     
     // MARK: - Main Processing Method
@@ -167,52 +176,15 @@ public class UnifiedDocumentProcessor {
     
 
     
-    /// Create an output stream for writing to a file
-    private func createOutputStream(for url: URL) throws -> OutputStream {
-        // Create the file if it doesn't exist, or truncate if it does
-        let outputStream = OutputStream(url: url, append: false)
-        guard let outputStream = outputStream else {
-            throw DocumentProcessingError.unsupportedOperation("Failed to create output stream for \(url.path)")
-        }
-        outputStream.open()
-        return outputStream
-    }
+
     
-    /// Write initial header to the output stream
-    private func writeHeaderToStream(_ outputStream: OutputStream) throws {
-        let header = "# Document Processing Results\n\n"
-        
-        guard let data = header.data(using: .utf8) else {
-            throw DocumentProcessingError.unsupportedOperation("Failed to convert header to UTF-8 data")
-        }
-        
-        let bytesWritten = data.withUnsafeBytes { buffer in
-            outputStream.write(buffer.bindMemory(to: UInt8.self).baseAddress!, maxLength: buffer.count)
-        }
-        
-        if bytesWritten != data.count {
-            throw DocumentProcessingError.unsupportedOperation("Failed to write complete header to output stream")
-        }
-        
-        logger.info("Initial header written to output stream")
-    }
-    
-    /// Append markdown content to output stream with page separator
+    /// Append markdown content to output stream with page separator using FileManager
     private func appendMarkdownToStream(_ markdown: String, to outputStream: OutputStream, pageNumber: Int) throws {
         let pageSeparator = "\n\n---\n\n## Page \(pageNumber)\n\n"
         let content = pageSeparator + markdown
         
-        guard let data = content.data(using: .utf8) else {
-            throw DocumentProcessingError.unsupportedOperation("Failed to convert markdown to UTF-8 data")
-        }
-        
-        let bytesWritten = data.withUnsafeBytes { buffer in
-            outputStream.write(buffer.bindMemory(to: UInt8.self).baseAddress!, maxLength: buffer.count)
-        }
-        
-        if bytesWritten != data.count {
-            throw DocumentProcessingError.unsupportedOperation("Failed to write complete markdown content to output stream")
-        }
+        // Use FileManager to write the content
+        try fileManager.writeString(content, to: outputStream)
     }
     
 
@@ -256,7 +228,7 @@ public class UnifiedDocumentProcessor {
         return fullMarkdown
     }
     
-    /// Generate table of contents and append to output stream
+    /// Generate table of contents and append to output stream using FileManager
     private func generateAndAppendTableOfContents(to outputStream: OutputStream, from elements: [DocumentElement]) async throws {
         logger.info("Generating table of contents from \(elements.count) elements")
         
@@ -264,19 +236,10 @@ public class UnifiedDocumentProcessor {
         let tocLines = generateTableOfContents(from: elements)
         let toc = "\n\n---\n\n" + tocLines.joined(separator: "\n")
         
-        guard let data = toc.data(using: .utf8) else {
-            throw DocumentProcessingError.unsupportedOperation("Failed to convert TOC to UTF-8 data")
-        }
+        // Use FileManager to write the TOC
+        try fileManager.writeString(toc, to: outputStream)
         
-        let bytesWritten = data.withUnsafeBytes { buffer in
-            outputStream.write(buffer.bindMemory(to: UInt8.self).baseAddress!, maxLength: buffer.count)
-        }
-        
-        if bytesWritten != data.count {
-            throw DocumentProcessingError.unsupportedOperation("Failed to write complete TOC to output stream")
-        }
-        
-        logger.info("Table of contents appended to output stream")
+        logger.info("Table of contents appended to output stream using FileManager")
     }
     
     /// Generate table of contents from document elements (same logic as MarkdownGenerator)
@@ -578,14 +541,19 @@ public class UnifiedDocumentProcessor {
         var previousPageContext: [DocumentElement] = [] // Keep last few paragraphs for cross-page context
         var allProcessedElements: [DocumentElement] = [] // Collect all elements for TOC generation
         
-        // Create output stream and write initial header
-        let outputStream = try createOutputStream(for: outputFileURL)
+        // Use FileManager to open output stream for markdown
+        let inputFileName = pdfURL.lastPathComponent
+        let outputStream = try fileManager.openOutputStream(
+            for: inputFileName, 
+            outputType: OutputType.markdown, 
+            append: false
+        )
         defer {
-            outputStream.close()
+            try? fileManager.closeOutputStream(outputStream)
         }
         
-        // Write initial header through the stream
-        try writeHeaderToStream(outputStream)
+        // Write initial header through the FileManager
+        try fileManager.writeString("# Document Processing Results\n\n", to: outputStream)
         
         // Process each page sequentially using processDocument
         for (pageIndex, pageImageData) in pageImages.enumerated() {
@@ -620,8 +588,7 @@ public class UnifiedDocumentProcessor {
             }
         }
         
-        // Final step: Generate and append table of contents
-        // We need to collect all elements from all pages to generate proper TOC
+        // Final step: Generate and append table of contents using FileManager
         try await generateAndAppendTableOfContents(to: outputStream, from: allProcessedElements)
         
         let processingTime = Date().timeIntervalSince(startTime)
@@ -636,7 +603,7 @@ public class UnifiedDocumentProcessor {
         )
         
         logger.info("PDF processing completed in \(String(format: "%.2f", processingTime))s")
-        logger.info("Final markdown written to: \(outputFileURL.path)")
+        logger.info("Final markdown written using FileManager")
         
         return result
     }

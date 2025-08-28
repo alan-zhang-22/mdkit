@@ -7,6 +7,7 @@
 
 import Foundation
 import Logging
+import mdkitConfiguration
 
 // MARK: - Prompt Templates Protocol
 
@@ -49,20 +50,20 @@ public protocol PromptTemplating {
 // MARK: - Prompt Templates Implementation
 
 /// Manages and provides prompt templates for different languages and use cases
-public class PromptTemplates: PromptTemplating {
+public class PromptManager: PromptTemplating {
     
     // MARK: - Properties
     
-    private let config: PromptTemplates
+    private let config: mdkitConfiguration.PromptTemplates
     private let logger: Logger
     
     // MARK: - Initialization
     
-    public init(config: PromptTemplates) {
+    public init(config: mdkitConfiguration.PromptTemplates) {
         self.config = config
-        self.logger = Logger(label: "mdkit.prompttemplates")
+        self.logger = Logger(label: "mdkit.promptmanager")
         
-        logger.info("PromptTemplates initialized with \(config.languages.count) languages")
+        logger.info("PromptManager initialized with \(config.languages.count) languages")
         logger.debug("Available languages: \(config.languages.keys.sorted().joined(separator: ", "))")
     }
     
@@ -340,12 +341,12 @@ public class PromptTemplates: PromptTemplating {
 
 // MARK: - Prompt Template Factory
 
-extension PromptTemplates {
+extension PromptManager {
     
-    /// Creates a PromptTemplates instance from configuration
+    /// Creates a PromptManager instance from configuration
     /// - Parameter config: MDKitConfig containing prompt template settings
-    /// - Returns: Configured PromptTemplates instance
-    public static func create(from config: MDKitConfig) -> PromptTemplates {
-        return PromptTemplates(config: config.llm.promptTemplates)
+    /// - Returns: Configured PromptManager instance
+    public static func create(from config: mdkitConfiguration.MDKitConfig) -> PromptManager {
+        return PromptManager(config: config.llm.promptTemplates)
     }
 }

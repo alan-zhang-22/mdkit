@@ -6,14 +6,15 @@
 //
 
 import XCTest
-@testable import mdkit
+@testable import mdkitLLM
+@testable import mdkitConfiguration
 
-final class PromptTemplatesTests: XCTestCase {
+final class PromptManagerTests: XCTestCase {
     
     // MARK: - Properties
     
-    var promptTemplates: PromptTemplates!
-    var mockConfig: PromptTemplates!
+    var promptManager: mdkitLLM.PromptManager!
+    var mockConfig: mdkitConfiguration.PromptTemplates!
     
     // MARK: - Test Setup and Teardown
     
@@ -94,11 +95,11 @@ final class PromptTemplatesTests: XCTestCase {
             fallbackLanguage: "en"
         )
         
-        promptTemplates = PromptTemplates(config: mockConfig)
+        promptManager = PromptManager(config: mockConfig)
     }
     
     override func tearDownWithError() throws {
-        promptTemplates = nil
+        promptManager = nil
         mockConfig = nil
         try super.tearDownWithError()
     }
@@ -106,7 +107,7 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - System Prompt Tests
     
     func testGetSystemPromptForEnglish() throws {
-        let prompt = promptTemplates.getSystemPrompt(for: "en")
+        let prompt = promptManager.getSystemPrompt(for: "en")
         
         XCTAssertTrue(prompt.contains("You are an expert document processor"))
         XCTAssertTrue(prompt.contains("Your expertise includes technical documents"))
@@ -114,7 +115,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetSystemPromptForChinese() throws {
-        let prompt = promptTemplates.getSystemPrompt(for: "zh")
+        let prompt = promptManager.getSystemPrompt(for: "zh")
         
         XCTAssertTrue(prompt.contains("您是一位专业的文档处理专家"))
         XCTAssertTrue(prompt.contains("您的专业领域包括技术文档"))
@@ -122,7 +123,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetSystemPromptForUnsupportedLanguage() throws {
-        let prompt = promptTemplates.getSystemPrompt(for: "fr")
+        let prompt = promptManager.getSystemPrompt(for: "fr")
         
         // Should fall back to default language (English)
         XCTAssertTrue(prompt.contains("You are an expert document processor"))
@@ -132,7 +133,7 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - Markdown Optimization Prompt Tests
     
     func testGetMarkdownOptimizationPromptForEnglish() throws {
-        let prompt = promptTemplates.getMarkdownOptimizationPrompt(
+        let prompt = promptManager.getMarkdownOptimizationPrompt(
             for: "en",
             documentTitle: "Test Document",
             pageCount: 5,
@@ -162,7 +163,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetMarkdownOptimizationPromptForChinese() throws {
-        let prompt = promptTemplates.getMarkdownOptimizationPrompt(
+        let prompt = promptManager.getMarkdownOptimizationPrompt(
             for: "zh",
             documentTitle: "测试文档",
             pageCount: 3,
@@ -194,7 +195,7 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - Structure Analysis Prompt Tests
     
     func testGetStructureAnalysisPromptForEnglish() throws {
-        let prompt = promptTemplates.getStructureAnalysisPrompt(
+        let prompt = promptManager.getStructureAnalysisPrompt(
             for: "en",
             documentType: "Technical Manual",
             elementCount: 30,
@@ -215,7 +216,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetStructureAnalysisPromptForChinese() throws {
-        let prompt = promptTemplates.getStructureAnalysisPrompt(
+        let prompt = promptManager.getStructureAnalysisPrompt(
             for: "zh",
             documentType: "技术手册",
             elementCount: 20,
@@ -238,7 +239,7 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - Table Optimization Prompt Tests
     
     func testGetTableOptimizationPromptForEnglish() throws {
-        let prompt = promptTemplates.getTableOptimizationPrompt(
+        let prompt = promptManager.getTableOptimizationPrompt(
             for: "en",
             tableContent: "| Header | Value |\n|--------|-------|"
         )
@@ -248,7 +249,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetTableOptimizationPromptForChinese() throws {
-        let prompt = promptTemplates.getTableOptimizationPrompt(
+        let prompt = promptManager.getTableOptimizationPrompt(
             for: "zh",
             tableContent: "| 标题 | 值 |\n|------|-----|"
         )
@@ -260,7 +261,7 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - List Optimization Prompt Tests
     
     func testGetListOptimizationPromptForEnglish() throws {
-        let prompt = promptTemplates.getListOptimizationPrompt(
+        let prompt = promptManager.getListOptimizationPrompt(
             for: "en",
             listContent: "- Item 1\n- Item 2"
         )
@@ -270,7 +271,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetListOptimizationPromptForChinese() throws {
-        let prompt = promptTemplates.getListOptimizationPrompt(
+        let prompt = promptManager.getListOptimizationPrompt(
             for: "zh",
             listContent: "- 项目 1\n- 项目 2"
         )
@@ -282,7 +283,7 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - Header Optimization Prompt Tests
     
     func testGetHeaderOptimizationPromptForEnglish() throws {
-        let prompt = promptTemplates.getHeaderOptimizationPrompt(
+        let prompt = promptManager.getHeaderOptimizationPrompt(
             for: "en",
             headerContent: "# Main Title\n## Subtitle"
         )
@@ -292,7 +293,7 @@ final class PromptTemplatesTests: XCTestCase {
     }
     
     func testGetHeaderOptimizationPromptForChinese() throws {
-        let prompt = promptTemplates.getHeaderOptimizationPrompt(
+        let prompt = promptManager.getHeaderOptimizationPrompt(
             for: "zh",
             headerContent: "# 主标题\n## 副标题"
         )
@@ -304,13 +305,13 @@ final class PromptTemplatesTests: XCTestCase {
     // MARK: - Technical Standard Prompt Tests
     
     func testGetTechnicalStandardPromptForEnglish() throws {
-        let prompt = promptTemplates.getTechnicalStandardPrompt(for: "en")
+        let prompt = promptManager.getTechnicalStandardPrompt(for: "en")
         
         XCTAssertTrue(prompt.contains("This is a technical standard document"))
     }
     
     func testGetTechnicalStandardPromptForChinese() throws {
-        let prompt = promptTemplates.getTechnicalStandardPrompt(for: "zh")
+        let prompt = promptManager.getTechnicalStandardPrompt(for: "zh")
         
         XCTAssertTrue(prompt.contains("这是一份技术标准文档"))
     }
@@ -319,7 +320,7 @@ final class PromptTemplatesTests: XCTestCase {
     
     func testFallbackToDefaultLanguage() throws {
         // Test with unsupported language
-        let prompt = promptTemplates.getSystemPrompt(for: "es")
+        let prompt = promptManager.getSystemPrompt(for: "es")
         
         // Should fall back to English (default)
         XCTAssertTrue(prompt.contains("You are an expert document processor"))
@@ -339,7 +340,7 @@ final class PromptTemplatesTests: XCTestCase {
             fallbackLanguage: "zh" // Available
         )
         
-        let fallbackTemplates = PromptTemplates(config: fallbackConfig)
+        let fallbackTemplates = PromptManager(config: fallbackConfig)
         let prompt = fallbackTemplates.getSystemPrompt(for: "fr")
         
         // Should fall back to Chinese (fallback)
@@ -355,7 +356,7 @@ final class PromptTemplatesTests: XCTestCase {
             fallbackLanguage: "en"
         )
         
-        let emptyTemplates = PromptTemplates(config: emptyConfig)
+        let emptyTemplates = PromptManager(config: emptyConfig)
         let prompt = emptyTemplates.getSystemPrompt(for: "en")
         
         // Should return empty string
@@ -375,7 +376,7 @@ final class PromptTemplatesTests: XCTestCase {
             fallbackLanguage: "en"
         )
         
-        let minimalTemplates = PromptTemplates(config: minimalConfig)
+        let minimalTemplates = PromptManager(config: minimalConfig)
         
         // Should use fallback prompts for missing ones
         let tablePrompt = minimalTemplates.getTableOptimizationPrompt(
@@ -394,7 +395,7 @@ final class PromptTemplatesTests: XCTestCase {
         
         measure {
             for language in languages {
-                _ = promptTemplates.getSystemPrompt(for: language)
+                _ = promptManager.getSystemPrompt(for: language)
             }
         }
     }
@@ -403,7 +404,7 @@ final class PromptTemplatesTests: XCTestCase {
         let longContent = String(repeating: "This is a long content string for testing placeholder replacement performance. ", count: 100)
         
         measure {
-            _ = promptTemplates.getMarkdownOptimizationPrompt(
+            _ = promptManager.getMarkdownOptimizationPrompt(
                 for: "en",
                 documentTitle: "Test",
                 pageCount: 1,

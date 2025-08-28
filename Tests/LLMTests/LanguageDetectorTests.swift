@@ -7,7 +7,8 @@
 
 import XCTest
 import NaturalLanguage
-@testable import mdkit
+@testable import mdkitLLM
+@testable import mdkitProtocols
 
 final class LanguageDetectorTests: XCTestCase {
     
