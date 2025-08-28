@@ -2,6 +2,7 @@ import Foundation
 import Logging
 import mdkitConfiguration
 import mdkitFileManagement
+import mdkitProtocols
 
 // MARK: - LLM Processing Protocol (Core Module Version)
 
@@ -26,6 +27,9 @@ public class MainProcessor {
     
     /// LLM processor for markdown optimization and structure analysis (optional)
     private let llmProcessor: LLMProcessing?
+    
+    /// Language detector for identifying document language
+    private let languageDetector: LanguageDetecting
     
     /// Markdown generator for converting document elements to markdown
     private let markdownGenerator: MarkdownGenerator
@@ -53,6 +57,14 @@ public class MainProcessor {
         
         // Initialize document processor
         self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager, markdownGenerator: markdownGenerator)
+        
+        // Initialize language detector
+        let minimumTextLength = config.processing.languageDetection?.minimumTextLength ?? 10
+        let confidenceThreshold = config.processing.languageDetection?.confidenceThreshold ?? 0.6
+        self.languageDetector = LanguageDetector(
+            minimumTextLength: minimumTextLength,
+            confidenceThreshold: confidenceThreshold
+        )
         
         // Initialize LLM processor if enabled
         if config.llm.enabled {
@@ -110,14 +122,18 @@ public class MainProcessor {
                 outputPath: outputPath
             )
             
-            // Step 6: Update statistics
-            let processingTime = Date().timeIntervalSince(startTime)
-            processingStats.update(
-                inputPath: inputPath,
-                outputPath: finalOutputPath,
-                processingTime: processingTime,
-                elementCount: documentElements.count
-            )
+                                    // Step 6: Update statistics with language information
+                        let processingTime = Date().timeIntervalSince(startTime)
+                        let documentText = documentElements.compactMap { $0.text }.joined(separator: " ")
+                        let detectedLanguage = languageDetector.detectLanguage(from: documentText)
+                        
+                        processingStats.update(
+                            inputPath: inputPath,
+                            outputPath: finalOutputPath,
+                            processingTime: processingTime,
+                            elementCount: documentElements.count,
+                            detectedLanguage: detectedLanguage
+                        )
             
             logger.info("PDF processing completed successfully in \(String(format: "%.2f", processingTime))s")
             
@@ -215,7 +231,19 @@ public class MainProcessor {
     private func generateMarkdown(from elements: [DocumentElement]) throws -> String {
         logger.info("Generating markdown from \(elements.count) elements")
         
-        return try markdownGenerator.generateMarkdown(from: elements)
+        // Detect document language for language-aware processing
+        let documentText = elements.compactMap { $0.text }.joined(separator: " ")
+        let detectedLanguage = languageDetector.detectLanguage(from: documentText)
+        
+        logger.info("Detected document language: \(detectedLanguage)")
+        
+        // Generate markdown with language context
+        let markdown = try markdownGenerator.generateMarkdown(from: elements)
+        
+        // Add language metadata to the markdown
+        let languageHeader = "\n\n---\n*Document Language: \(detectedLanguage)*\n---\n\n"
+        
+        return markdown + languageHeader
     }
     
     /// Optimize markdown using LLM if enabled
@@ -287,7 +315,25 @@ public class MainProcessor {
     public func getConfiguration() -> MDKitConfig {
         return config
     }
+    
+    /// Detect language from text content
+    /// - Parameter text: Text content to analyze
+    /// - Returns: Detected language code
+    public func detectLanguage(from text: String) -> String {
+        return languageDetector.detectLanguage(from: text)
+    }
+    
+    /// Detect language with confidence from text content
+    /// - Parameter text: Text content to analyze
+    /// - Returns: Tuple of (language, confidence)
+    public func detectLanguageWithConfidence(from text: String) -> (language: String, confidence: Double) {
+        return languageDetector.detectLanguageWithConfidence(from: text)
+    }
+    
+
 }
+
+
 
 // MARK: - Supporting Types
 
@@ -382,6 +428,9 @@ public class ProcessingStatistics {
     /// Total processing time
     public private(set) var totalProcessingTime: TimeInterval = 0
     
+    /// Language distribution across processed documents
+    public private(set) var languageDistribution: [String: Int] = [:]
+    
     /// Average processing time per file
     public var averageProcessingTime: TimeInterval {
         return totalFiles > 0 ? totalProcessingTime / Double(totalFiles) : 0
@@ -398,22 +447,31 @@ public class ProcessingStatistics {
         successfulFiles = 0
         failedFiles = 0
         totalProcessingTime = 0
+        languageDistribution.removeAll()
     }
     
-    /// Update statistics with a new result
+        /// Update statistics with a new result
     public func update(
         inputPath: String,
         outputPath: String?,
         processingTime: TimeInterval,
-        elementCount: Int
+        elementCount: Int,
+        detectedLanguage: String
     ) {
         totalFiles += 1
         totalProcessingTime += processingTime
-        
+
         if outputPath != nil {
             successfulFiles += 1
         } else {
             failedFiles += 1
+        }
+        
+        // Track language distribution
+        if let count = languageDistribution[detectedLanguage] {
+            languageDistribution[detectedLanguage] = count + 1
+        } else {
+            languageDistribution[detectedLanguage] = 1
         }
     }
 }

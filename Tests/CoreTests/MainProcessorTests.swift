@@ -251,7 +251,8 @@ final class MainProcessorTests: XCTestCase {
             inputPath: "/test/file1.pdf",
             outputPath: "/test/output1.md",
             processingTime: 1.5,
-            elementCount: 10
+            elementCount: 10,
+            detectedLanguage: "en"
         )
         
         XCTAssertEqual(stats.totalFiles, 1)
@@ -266,7 +267,8 @@ final class MainProcessorTests: XCTestCase {
             inputPath: "/test/file2.pdf",
             outputPath: nil,
             processingTime: 0.5,
-            elementCount: 0
+            elementCount: 0,
+            detectedLanguage: "en"
         )
         
         XCTAssertEqual(stats.totalFiles, 2)
@@ -285,7 +287,8 @@ final class MainProcessorTests: XCTestCase {
             inputPath: "/test/file.pdf",
             outputPath: "/test/output.md",
             processingTime: 1.0,
-            elementCount: 5
+            elementCount: 5,
+            detectedLanguage: "en"
         )
         
         // Verify data exists
@@ -419,7 +422,8 @@ final class MainProcessorTests: XCTestCase {
                     inputPath: "/test/file\(i).pdf",
                     outputPath: "/test/output\(i).md",
                     processingTime: Double.random(in: 0.1...5.0),
-                    elementCount: Int.random(in: 1...100)
+                    elementCount: Int.random(in: 1...100),
+                    detectedLanguage: "en"
                 )
             }
         }
