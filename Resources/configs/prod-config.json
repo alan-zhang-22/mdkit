@@ -39,6 +39,7 @@
     "modelPath": "",
     "model": {
       "id": "ggml-org/Meta-Llama-3.1-8B-Instruct-Q4_0-GGUF",
+      "identifier": "ggml-org/Meta-Llama-3.1-8B-Instruct-Q4_0-GGUF",
       "name": "Meta Llama 3.1 8B Instruct Q4_0",
       "type": "gguf",
       "downloadUrl": "",
@@ -50,6 +51,7 @@
       "topK": 40,
       "penaltyRepeat": 1.1,
       "penaltyFrequency": 0.8,
+      "maxTokens": 4096,
       "context": 4096,
       "batch": 512,
       "threads": 8,
