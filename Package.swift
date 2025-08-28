@@ -48,7 +48,7 @@ let package = Package(
         // File logging backend for swift-log
         .package(url: "https://github.com/crspybits/swift-log-file", from: "0.1.0"),
         // Command-line argument parsing
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.0.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.4.0")
     ],
     targets: [
         // MARK: - Executable Target (CLI application)

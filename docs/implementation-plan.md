@@ -4,11 +4,11 @@
 
 This document outlines the implementation plan for mdkit, a PDF to Markdown conversion tool that leverages Apple's Vision framework for intelligent document analysis and local LLMs for markdown optimization. The implementation follows a phased approach to ensure quality, maintainability, and incremental delivery of features.
 
-## Current Status: Phase 1, 2, 3, 4, 5, 6.1 & LanguageDetector Integration Complete, Phase 6.2 Ready to Start
+## Current Status: Phase 1, 2, 3, 4, 5, 6.1, 6.2 & LanguageDetector Integration Complete, Phase 6.3 Ready to Start
 
-**Last Updated**: August 28, 2025 (Updated after LanguageDetector Core integration)  
+**Last Updated**: August 28, 2025 (Updated after CLI dry-run testing and fixes)  
 **Current Phase**: Phase 6 - Integration & Testing  
-**Overall Progress**: ~98% Complete
+**Overall Progress**: ~99% Complete
 
 ## Project Structure
 
@@ -51,7 +51,7 @@ mdkit/
 │   │   ├── Logging.swift ✅ COMPLETED
 │   │   └── DocumentProcessing.swift ✅ COMPLETED
 │   └── CLI/
-│       ├── main.swift ✅ COMPLETED
+│       ├── main.swift ✅ COMPLETED (with dry-run and all CLI fixes)
 │       └── CommandLineOptions.swift ❌ NOT STARTED
 ├── Tests/
 │   ├── CoreTests/ ✅ COMPLETED (includes MainProcessorTests & LanguageDetectorIntegrationTests)
@@ -339,12 +339,17 @@ mdkit/
 - [x] **NEW: Add language-aware markdown generation**
 - [x] **NEW: Enhance processing statistics with language information**
 
-#### 6.2 CLI Interface 🔄 PARTIALLY COMPLETED
+#### 6.2 CLI Interface ✅ COMPLETED
 - [x] Implement command-line interface
 - [x] Add argument parsing
 - [x] Create help and usage information
-- [ ] Add configuration file support
-- [ ] Implement dry-run mode
+- [x] Add configuration file support
+- [x] Implement dry-run mode
+- [x] Fix all command line tool issues
+- [x] Resolve argument name conflicts
+- [x] Fix output path generation for .md files
+- [x] Fix LLM optimization flag conflict handling
+- [x] Test all CLI commands successfully
 
 #### 6.3 Integration Testing 🔄 READY TO START
 - [ ] Create end-to-end test scenarios
@@ -355,14 +360,17 @@ mdkit/
 
 **Deliverables:** 🔄 **PARTIALLY COMPLETED**
 - ✅ Complete processing pipeline (MainProcessor implemented with LanguageDetector integration)
-- ✅ Command-line interface (basic)
+- ✅ Command-line interface (fully functional with dry-run and all fixes)
+- ✅ CLI testing and validation (all commands working correctly)
 - 🔄 Integration tests (ready to start)
 - ❌ Performance benchmarks
 
 **Success Criteria:** 🔄 **PARTIALLY ACHIEVED**
 - ✅ End-to-end processing works (MainProcessor orchestrates all components with LanguageDetector)
-- ✅ CLI is user-friendly (basic)
+- ✅ CLI is user-friendly (fully functional with dry-run and comprehensive help)
 - ✅ All tests pass (237/237 tests passing - 100% success rate)
+- ✅ CLI commands all working correctly (convert, config, validate)
+- ✅ Dry-run functionality working perfectly with configuration files
 - ❌ Performance meets requirements
 
 ---
@@ -616,6 +624,15 @@ struct DocumentElement {
 - **Test Coverage**: 7 comprehensive integration tests with 100% pass rate
 - **Performance**: Language detection happens once per document, not per LLM call
 
+#### **CLI Interface & Dry-Run System (Completed - August 28, 2025)**
+- **Command-Line Interface**: Fully functional CLI with comprehensive command support
+- **Dry-Run Mode**: Professional analysis mode showing detailed processing information
+- **Configuration Management**: Full support for loading and validating configuration files
+- **Issue Resolution**: Fixed all command line tool issues and argument conflicts
+- **Output Path Generation**: Corrected path generation for proper .md file creation
+- **LLM Flag Handling**: Intelligent handling of CLI flags vs configuration settings
+- **Testing**: All CLI commands tested and working correctly
+
 #### **Professional-Grade PDF Processing**
 - **Image Quality**: 2.0x resolution scaling with anti-aliasing and subpixel positioning
 - **Enhancement Pipeline**: Core Image filters for contrast (1.15x) and sharpening (0.3)
@@ -661,7 +678,7 @@ struct DocumentElement {
 6. **LLM Integration**: Toggle and framework in place
 7. **High-Quality PDF Processing**: Professional-grade image conversion and enhancement
 8. **Multi-Page Support**: Efficient page-by-page processing with streaming output
-9. **Testing**: Comprehensive unit test coverage (208/211 tests passing - 98.6% success rate)
+9. **Testing**: Comprehensive unit test coverage (237/237 tests passing - 100% success rate)
 10. **Element Merging**: Complete merging system with intelligent scoring
 11. **Advanced Header Detection**: Pattern-based detection with configurable regex patterns
 12. **List Item Processing**: Complete list detection and merging system
@@ -678,6 +695,10 @@ struct DocumentElement {
 23. **Build System Stability**: C++ interoperability enabled and naming conflicts resolved
 24. **Main Processing Pipeline**: Complete MainProcessor orchestrator with comprehensive error handling and statistics
 25. **LanguageDetector Core Integration**: Moved to Core module and integrated into MainProcessor for language-aware processing
+26. **CLI Interface**: Fully functional command-line interface with dry-run, configuration support, and all commands working
+27. **Dry-Run Functionality**: Comprehensive analysis mode showing what would happen without processing files
+28. **Configuration File Support**: Full support for loading and validating configuration files
+29. **Argument Conflict Resolution**: Fixed all command line tool issues and argument name conflicts
 
 #### **🎯 Image Quality Optimizations (Completed)**
 - **High-Quality Rendering**: 2.0x resolution scaling with anti-aliasing and subpixel positioning
@@ -697,9 +718,19 @@ struct DocumentElement {
 - **Configuration Management**: Flexible configuration handling with validation and fallbacks
 - **Test Coverage**: 19 comprehensive test cases with 100% pass rate
 
+#### **🎯 CLI Interface & Dry-Run System (Completed - August 28, 2025)**
+- **Command-Line Interface**: Fully functional CLI with convert, config, and validate commands
+- **Dry-Run Mode**: Comprehensive analysis showing file analysis, configurations, and processing steps
+- **Configuration Support**: Full support for loading and validating configuration files
+- **Argument Management**: Resolved all command line tool issues and argument name conflicts
+- **Output Path Generation**: Fixed path generation for proper .md file creation
+- **LLM Flag Handling**: Smart handling of CLI flags vs configuration file settings
+- **Help System**: Comprehensive help and usage examples for all commands
+- **Testing**: All CLI commands tested and working correctly
+
 ### What's Partially Working 🔄
 1. **LLM Optimization**: Toggle works but actual optimization not implemented
-2. **CLI Interface**: Basic functionality working, advanced features missing
+2. **CLI Interface**: ✅ Fully functional with dry-run, configuration support, and all commands working
 3. **File Management**: ✅ Centralized file management system completed with streaming support
 4. **Logging**: ✅ Comprehensive logging system implemented with swift-log integration
 5. **Build System**: ✅ Stable compilation with C++ interoperability and naming conflicts resolved
@@ -712,6 +743,7 @@ struct DocumentElement {
 4. **File Management**: ✅ Centralized file handling and output management completed
 5. **Advanced Logging**: ✅ Comprehensive logging system implemented
 6. **Build System**: ✅ C++ interoperability and naming conflicts resolved
+7. **CLI Interface**: ✅ Fully functional with dry-run and all fixes completed
 
 ## Next Steps
 
@@ -721,8 +753,9 @@ struct DocumentElement {
 3. **✅ Build System Stable**: C++ interoperability and naming conflicts resolved
 4. **✅ Phase 6.1 Complete**: MainProcessor implementation with comprehensive testing
 5. **✅ LanguageDetector Integration Complete**: Moved to Core module and integrated into MainProcessor
-6. **Start Phase 6.2**: CLI enhancement with configuration file support and dry-run mode
-7. **Performance Testing**: Validate speed and memory requirements
+6. **✅ Phase 6.2 Complete**: CLI enhancement with configuration file support and dry-run mode
+7. **Start Phase 6.3**: Integration testing with end-to-end workflow validation
+8. **Performance Testing**: Validate speed and memory requirements
 
 ### Medium Term (Next 4-6 weeks)
 1. **✅ Phase 4 Complete**: File management and logging systems
@@ -730,16 +763,18 @@ struct DocumentElement {
 3. **✅ Build System Stable**: C++ interoperability and naming conflicts resolved
 4. **✅ Phase 6.1 Complete**: MainProcessor implementation
 5. **✅ LanguageDetector Integration Complete**: Core module integration and MainProcessor enhancement
-6. **Complete Phase 6.2**: CLI enhancement with configuration file support and dry-run mode
-7. **Performance Testing**: Validate speed and memory requirements
+6. **✅ Phase 6.2 Complete**: CLI enhancement with configuration file support and dry-run mode
+7. **Complete Phase 6.3**: Integration testing with end-to-end workflow validation
+8. **Performance Testing**: Validate speed and memory requirements
 
 ### Long Term (Next 8-10 weeks)
 1. **✅ Phase 5 Complete**: Language detection and prompt templates
 2. **✅ Build System Stable**: C++ interoperability and naming conflicts resolved
 3. **✅ Phase 6.1 Complete**: MainProcessor implementation
 4. **✅ LanguageDetector Integration Complete**: Core module architecture improvement
-5. **Complete Phase 6.2**: CLI enhancement and integration testing
-6. **Phase 7**: Optimization and documentation
+5. **✅ Phase 6.2 Complete**: CLI enhancement with dry-run and all fixes
+6. **Complete Phase 6.3**: Integration testing and end-to-end validation
+7. **Phase 7**: Optimization and documentation
 
 ## Post-Implementation
 
@@ -765,10 +800,10 @@ struct DocumentElement {
 
 ## Conclusion
 
-The implementation is progressing excellently with **Phase 1 (Foundation & Core Infrastructure), Phase 2 (Document Processing Core), Phase 3 (Header & Footer Detection), Phase 4 (File Management & Logging), Phase 5 (LLM Integration), Phase 6.1 (Main Processing Pipeline), and LanguageDetector Core Integration all fully completed**. 
+The implementation is progressing excellently with **Phase 1 (Foundation & Core Infrastructure), Phase 2 (Document Processing Core), Phase 3 (Header & Footer Detection), Phase 4 (File Management & Logging), Phase 5 (LLM Integration), Phase 6.1 (Main Processing Pipeline), Phase 6.2 (CLI Enhancement), and LanguageDetector Core Integration all fully completed**. 
 
 **Key Achievements:**
-- ✅ Solid foundation with comprehensive testing (230/230 tests passing - 100% success rate)
+- ✅ Solid foundation with comprehensive testing (237/237 tests passing - 100% success rate)
 - ✅ Vision framework integration working
 - ✅ Complete document processing pipeline implemented
 - ✅ Header/footer detection functional
@@ -794,13 +829,19 @@ The implementation is progressing excellently with **Phase 1 (Foundation & Core 
 - ✅ **NEW: Language-aware document processing with automatic language detection**
 - ✅ **NEW: Enhanced processing statistics with language distribution tracking**
 - ✅ **NEW: LLMProcessor refactoring - simplified to accept pre-detected language**
+- ✅ **NEW: CLI Interface - fully functional command-line interface with dry-run capabilities**
+- ✅ **NEW: Dry-Run System - comprehensive analysis mode for testing and validation**
+- ✅ **NEW: Configuration Management - full support for loading and validating configuration files**
+- ✅ **NEW: Issue Resolution - all command line tool issues and argument conflicts resolved**
 
 **Current Focus:**
 Phase 6.1 is **100% COMPLETE** with the `MainProcessor` class fully implemented and tested. The system now provides a complete processing pipeline that orchestrates all components (UnifiedDocumentProcessor, FileManager, LLMProcessor, LanguageDetector) with comprehensive error handling, processing statistics, and progress tracking. **The MainProcessor includes 19 comprehensive test cases with 100% pass rate, providing robust error handling with structured ProcessingResult objects and smart protocol-based LLM integration to avoid circular dependencies.** 
 
 **LanguageDetector Integration is 100% COMPLETE** with the detector moved to the Core module and integrated into the MainProcessor pipeline. The system now provides language-aware document processing with enhanced statistics and language distribution tracking. **LanguageDetector integration includes 7 comprehensive test cases with 100% pass rate, providing language-aware markdown generation and improved architecture.**
 
-Phase 6.2 (CLI Enhancement) is ready to start with configuration file support and dry-run mode.
+**Phase 6.2 (CLI Enhancement) is 100% COMPLETE** with the command-line interface fully functional, dry-run mode working perfectly, configuration file support implemented, and all command line tool issues resolved. **The CLI now provides comprehensive analysis capabilities, proper output path generation, intelligent LLM flag handling, and all commands (convert, config, validate) working correctly.**
+
+**Phase 6.3 (Integration Testing) is ready to start** with end-to-end workflow validation. The system now has a solid foundation with all core components working, comprehensive testing coverage, and a fully functional CLI interface for testing and validation.
 
 **Risk Assessment:**
 - **Low Risk**: Core infrastructure is solid and well-tested
@@ -816,4 +857,4 @@ Phase 6.2 (CLI Enhancement) is ready to start with configuration file support an
 
 The phased approach is working exceptionally well, with each component thoroughly tested before moving forward. **Phase 2 represents a major milestone** - the system now produces output that rivals commercial PDF processing tools, making it suitable for professional document conversion workflows. The recent addition of directional merging thresholds significantly improves header detection and text spacing preservation.
 
-**Next Major Milestone**: Complete Phase 6.2 to add CLI enhancement with configuration file support and dry-run mode, which will provide user-friendly configuration management and validation capabilities. The complete MainProcessor implementation with LanguageDetector integration and stable build system provide an excellent foundation for this next phase. **The MainProcessor's comprehensive error handling, processing statistics with language distribution tracking, and language-aware document processing make the system more robust, easier to monitor in production, and provide better insights into document language patterns.**
+**Next Major Milestone**: Complete Phase 6.3 to add integration testing with end-to-end workflow validation, which will provide comprehensive testing of the complete document processing pipeline. The complete MainProcessor implementation with LanguageDetector integration, fully functional CLI interface with dry-run capabilities, and stable build system provide an excellent foundation for this next phase. **The MainProcessor's comprehensive error handling, processing statistics with language distribution tracking, language-aware document processing, and the CLI's dry-run functionality make the system more robust, easier to monitor in production, and provide better insights into document language patterns and processing workflows.**
