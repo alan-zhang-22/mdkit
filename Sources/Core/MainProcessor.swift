@@ -48,11 +48,11 @@ public class MainProcessor {
         // Initialize file manager
         self.fileManager = MDKitFileManager(config: config.fileManagement)
         
-        // Initialize document processor
-        self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager)
-        
         // Initialize markdown generator
         self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
+        
+        // Initialize document processor
+        self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager, markdownGenerator: markdownGenerator)
         
         // Initialize LLM processor if enabled
         if config.llm.enabled {

@@ -81,18 +81,19 @@ public class UnifiedDocumentProcessor {
     
     // MARK: - Initialization
     
-    public init(config: MDKitConfig, fileManager: FileManaging) {
+    public init(config: MDKitConfig, fileManager: FileManaging, markdownGenerator: MarkdownGenerator) {
         self.config = config
         self.fileManager = fileManager
+        self.markdownGenerator = markdownGenerator
         self.logger = Logger(label: "UnifiedDocumentProcessor")
         self.overlapDetector = SimpleOverlapDetector(config: config)
-        self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
     }
     
-    // Convenience initializer that creates a default FileManager
+    // Convenience initializer that creates a default FileManager and MarkdownGenerator
     public convenience init(config: MDKitConfig) {
         let defaultFileManager = MDKitFileManager(config: config.fileManagement)
-        self.init(config: config, fileManager: defaultFileManager)
+        let defaultMarkdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
+        self.init(config: config, fileManager: defaultFileManager, markdownGenerator: defaultMarkdownGenerator)
     }
     
     // MARK: - Main Processing Method
