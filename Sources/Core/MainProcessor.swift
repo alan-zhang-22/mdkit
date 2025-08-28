@@ -27,6 +27,9 @@ public class MainProcessor {
     /// LLM processor for markdown optimization and structure analysis (optional)
     private let llmProcessor: LLMProcessing?
     
+    /// Markdown generator for converting document elements to markdown
+    private let markdownGenerator: MarkdownGenerator
+    
     /// Logger instance
     private let logger: Logger
     
@@ -47,6 +50,9 @@ public class MainProcessor {
         
         // Initialize document processor
         self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager)
+        
+        // Initialize markdown generator
+        self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
         
         // Initialize LLM processor if enabled
         if config.llm.enabled {
@@ -209,7 +215,6 @@ public class MainProcessor {
     private func generateMarkdown(from elements: [DocumentElement]) throws -> String {
         logger.info("Generating markdown from \(elements.count) elements")
         
-        let markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
         return try markdownGenerator.generateMarkdown(from: elements)
     }
     
