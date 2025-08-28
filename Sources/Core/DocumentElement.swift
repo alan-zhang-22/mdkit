@@ -189,14 +189,20 @@ extension DocumentElement {
         guard pageNumber == other.pageNumber else { return false }
         
         // Check if elements are on the same line or side by side
-        let isSameLine = boundingBox.isVerticallyAligned(with: other.boundingBox, tolerance: 20.0) // Same line (similar Y)
-        let isSideBySide = boundingBox.isHorizontallyAligned(with: other.boundingBox, tolerance: 15.0) // Side by side (similar X)
+        // Use a reasonable tolerance that accounts for font variations
+        let isSameLine = boundingBox.isVerticallyAligned(with: other.boundingBox, tolerance: 0.08) // Same line (8% tolerance)
+        let isSideBySide = boundingBox.isHorizontallyAligned(with: other.boundingBox, tolerance: 0.08) // Side by side (8% tolerance)
         
         // Calculate distance
         let distance = mergeDistance(to: other)
         
+        // Override alignment classification if distance is too large
+        // This prevents elements that are far apart from being considered "same line"
+        let effectiveIsSameLine = isSameLine && distance <= 0.15 // Max 15% distance for same line
+        let effectiveIsSideBySide = isSideBySide && distance <= 0.15 // Max 15% distance for side by side
+        
         if let config = config {
-            if isSameLine {
+            if effectiveIsSameLine {
                 // Same line merging: much more permissive (e.g., "5.1.2" and "Access Control")
                 if config.isHorizontalMergeThresholdNormalized {
                     return distance <= Float(config.horizontalMergeThreshold)
@@ -206,7 +212,7 @@ extension DocumentElement {
                     let distanceInPoints = distance * Float(documentWidth)
                     return distanceInPoints <= Float(config.horizontalMergeThreshold)
                 }
-            } else if isSideBySide {
+            } else if effectiveIsSideBySide {
                 // Side by side merging: use standard threshold
                 if config.isMergeDistanceNormalized {
                     return distance <= Float(config.mergeDistanceThreshold)
