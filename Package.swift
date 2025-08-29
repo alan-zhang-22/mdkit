@@ -6,13 +6,18 @@ import PackageDescription
 let package = Package(
     name: "mdkitLibraries",
     platforms: [
-        .macOS(.v26) // Required for RecognizeDocumentsRequest and DocumentObservation
+        .macOS(.v26) // Required for RecognizeDocumentsRequest, DocumentObservation, and async/await support
     ],
     products: [
         // Executable target for command-line usage
         .executable(
             name: "mdkit",
             targets: ["mdkitExecutable"]
+        ),
+        // Async executable target for enhanced command-line usage
+        .executable(
+            name: "mdkit-async",
+            targets: ["mdkitAsyncExecutable"]
         ),
         // Library targets for use in other projects
         .library(
@@ -69,6 +74,20 @@ let package = Package(
             ]
         ),
         
+        // MARK: - Async Executable Target (Enhanced CLI with async processing)
+        .executableTarget(
+            name: "mdkitAsyncExecutable",
+            dependencies: [
+                "mdkitCore",
+                "mdkitLogging",
+                .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            path: "mdkit-async",
+            swiftSettings: [
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
+        
         // MARK: - Logging Configuration (depends on swift-log and swift-log-file)
         .target(
             name: "mdkitLogging",
@@ -88,12 +107,14 @@ let package = Package(
             path: "Sources/Configuration"
         ),
         
-        // MARK: - Core (depends on Configuration and Logging)
+        // MARK: - Core (depends on Configuration, Logging, Protocols, and FileManagement)
         .target(
             name: "mdkitCore",
             dependencies: [
                 "mdkitConfiguration",
-                "mdkitLogging"
+                "mdkitLogging",
+                "mdkitProtocols",
+                "mdkitFileManagement"
             ],
             path: "Sources/Core",
             swiftSettings: [
