@@ -34,6 +34,9 @@ public class MainProcessor {
     /// Markdown generator for converting document elements to markdown
     private let markdownGenerator: MarkdownGenerator
     
+    /// Output generator for multiple output types (OCR, markdown, prompts, LLM-optimized)
+    private let outputGenerator: OutputGenerator
+    
     /// Logger instance
     private let logger: Logger
     
@@ -54,6 +57,9 @@ public class MainProcessor {
         
         // Initialize markdown generator
         self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
+        
+        // Initialize output generator for multiple output types
+        self.outputGenerator = OutputGenerator(config: config)
         
         // Initialize document processor
         self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager, markdownGenerator: markdownGenerator)
@@ -111,37 +117,41 @@ public class MainProcessor {
             // Process the PDF - UnifiedDocumentProcessor now returns elements
             let processingResult = try await documentProcessor.processPDF(pdfURL, outputFileURL: outputURL, pageRange: pageRange)
             
-            // Step 3: Generate markdown from the returned elements
-            let initialMarkdown = try generateMarkdown(from: processingResult.elements)
+            // Step 3: Generate all output types from the returned elements
+            let allOutputs = try generateAllOutputTypes(from: processingResult.elements)
             
-            // Step 4: Optimize markdown using LLM if enabled
-            let optimizedMarkdown = try await optimizeMarkdown(initialMarkdown, elements: processingResult.elements)
-            
-            // Step 5: Write final output
-            let finalOutputPath = try writeOutput(
-                markdown: optimizedMarkdown,
+            // Step 4: Write all output types
+            let finalOutputPaths = try writeAllOutputs(
+                outputs: allOutputs,
                 inputPath: inputPath,
                 outputPath: outputPath
             )
             
             // Step 6: Update statistics
             let processingTime = Date().timeIntervalSince(startTime)
-            let detectedLanguage = languageDetector.detectLanguage(from: optimizedMarkdown)
+            
+            // Use the first available output for language detection (prefer markdown)
+            let languageDetectionText = allOutputs[.markdown] ?? allOutputs[.ocr] ?? allOutputs.values.first ?? ""
+            let detectedLanguage = languageDetector.detectLanguage(from: languageDetectionText)
+            
+            // Get the primary output path (markdown if available, otherwise first available)
+            let primaryOutputPath = finalOutputPaths[.markdown] ?? finalOutputPaths.values.first ?? "multiple outputs"
             
             processingStats.update(
                 inputPath: inputPath,
-                outputPath: finalOutputPath,
+                outputPath: primaryOutputPath,
                 processingTime: processingTime,
                 elementCount: processingResult.elements.count, // Actual element count
                 detectedLanguage: detectedLanguage
             )
             
             logger.info("PDF processing completed successfully in \(String(format: "%.2f", processingTime))s")
+            logger.info("Generated \(finalOutputPaths.count) output types: \(finalOutputPaths.keys.map { $0.description }.joined(separator: ", "))")
             
             return ProcessingResult(
                 success: true,
                 inputPath: inputPath,
-                outputPath: finalOutputPath,
+                outputPath: primaryOutputPath,
                 processingTime: processingTime,
                 elementCount: processingResult.elements.count,
                 statistics: processingStats
@@ -247,6 +257,31 @@ public class MainProcessor {
         return markdown + languageHeader
     }
     
+    /// Generate all output types from document elements
+    private func generateAllOutputTypes(from elements: [DocumentElement]) throws -> [OutputType: String] {
+        guard !elements.isEmpty else {
+            throw MainProcessorError.noElementsToProcess
+        }
+        
+        logger.info("Generating all output types from \(elements.count) elements")
+        
+        var outputs: [OutputType: String] = [:]
+        
+        // Generate each output type
+        for outputType in OutputType.allCases {
+            do {
+                let output = try outputGenerator.generateOutput(from: elements, outputType: outputType)
+                outputs[outputType] = output
+                logger.info("Generated \(outputType.description) output")
+            } catch {
+                logger.warning("Failed to generate \(outputType.description) output: \(error.localizedDescription)")
+                // Continue with other output types instead of failing completely
+            }
+        }
+        
+        return outputs
+    }
+    
 
     
     /// Optimize markdown using LLM if enabled
@@ -268,6 +303,34 @@ public class MainProcessor {
             logger.warning("LLM optimization failed, falling back to original markdown: \(error.localizedDescription)")
             return markdown
         }
+    }
+    
+    /// Write all output types to files
+    private func writeAllOutputs(
+        outputs: [OutputType: String],
+        inputPath: String,
+        outputPath: String?
+    ) throws -> [OutputType: String] {
+        
+        var outputPaths: [OutputType: String] = [:]
+        
+        for (outputType, content) in outputs {
+            do {
+                let outputPath = try writeOutput(
+                    content: content,
+                    inputPath: inputPath,
+                    outputPath: outputPath,
+                    outputType: outputType
+                )
+                outputPaths[outputType] = outputPath
+                logger.info("\(outputType.description) written to: \(outputPath)")
+            } catch {
+                logger.warning("Failed to write \(outputType.description) output: \(error.localizedDescription)")
+                // Continue with other output types instead of failing completely
+            }
+        }
+        
+        return outputPaths
     }
     
     /// Write the output markdown to file
@@ -299,6 +362,45 @@ public class MainProcessor {
         try markdown.write(toFile: finalOutputPath, atomically: true, encoding: .utf8)
         
         logger.info("Output written to: \(finalOutputPath)")
+        return finalOutputPath
+    }
+    
+    /// Write output content to file with specific output type
+    private func writeOutput(
+        content: String,
+        inputPath: String,
+        outputPath: String?,
+        outputType: OutputType
+    ) throws -> String {
+        
+        let finalOutputPath: String
+        
+        // Always create the proper directory structure for specific output types
+        let inputFileName = URL(fileURLWithPath: inputPath).lastPathComponent
+        let baseName = inputFileName.replacingOccurrences(of: ".pdf", with: "")
+        let timestamp = DateFormatter().string(from: Date())
+        
+        if let outputPath = outputPath {
+            // If outputPath is provided, use it as the base directory but still create proper structure
+            // Ensure outputPath is treated as a directory path
+            let baseOutputDir = outputPath.hasSuffix("/") ? outputPath : "\(outputPath)/"
+            finalOutputPath = "\(baseOutputDir)\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
+        } else {
+            // Generate default output path for specific output type
+            finalOutputPath = "\(config.output.outputDirectory)/\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
+        }
+        
+        // Ensure output directory exists
+        let outputURL = URL(fileURLWithPath: finalOutputPath)
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        
+        // Write content to file
+        try content.write(toFile: finalOutputPath, atomically: true, encoding: .utf8)
+        
+        logger.info("\(outputType.description) written to: \(finalOutputPath)")
         return finalOutputPath
     }
     
@@ -487,6 +589,7 @@ public enum MainProcessorError: LocalizedError {
     case outputDirectoryCreationFailed(path: String)
     case markdownGenerationFailed
     case llmOptimizationFailed
+    case noElementsToProcess
     
     public var errorDescription: String? {
         switch self {
@@ -502,6 +605,8 @@ public enum MainProcessorError: LocalizedError {
             return "Failed to generate markdown from document elements"
         case .llmOptimizationFailed:
             return "Failed to optimize markdown using LLM"
+        case .noElementsToProcess:
+            return "No document elements to process"
         }
     }
 }

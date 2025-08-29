@@ -35,7 +35,7 @@ public typealias MarkdownGenerationConfig = mdkitConfiguration.MarkdownGeneratio
 
 // MARK: - Markdown Generator
 
-public class MarkdownGenerator {
+public final class MarkdownGenerator: Sendable {
     
     // MARK: - Properties
     

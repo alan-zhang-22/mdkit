@@ -10,7 +10,7 @@ import CoreGraphics
 import mdkitConfiguration
 
 /// Represents a single element extracted from a document using Apple's Vision framework
-public struct DocumentElement: Identifiable, Codable, Equatable {
+public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
     /// Unique identifier for this element
     public let id: UUID
     
@@ -64,7 +64,7 @@ public struct DocumentElement: Identifiable, Codable, Equatable {
 // MARK: - ElementType Enum
 
 /// Types of document elements that can be detected
-public enum ElementType: String, CaseIterable, Codable {
+public enum ElementType: String, CaseIterable, Codable, Sendable {
     /// Document title or main heading
     case title = "title"
     

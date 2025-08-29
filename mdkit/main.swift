@@ -96,6 +96,12 @@ struct Convert: ParsableCommand {
     @Flag(name: .long, help: "Enable LLM optimization")
     var enableLLM: Bool = false
     
+    @Flag(name: .long, help: "Enable async processing with progress updates")
+    var async: Bool = false
+    
+    @Option(name: .long, help: "Timeout in seconds for async operations (default: 300)")
+    var timeout: Int = 300
+    
     // MARK: - Dry-Run Function
     
     private func performDryRun(

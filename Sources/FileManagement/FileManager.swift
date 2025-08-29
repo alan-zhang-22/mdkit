@@ -18,7 +18,7 @@ public enum OutputType: String, CaseIterable, Codable {
     case markdownLLM = "markdown_llm"
     
     // File extension for each type
-    var fileExtension: String {
+    public var fileExtension: String {
         switch self {
         case .ocr: return "txt"
         case .markdown: return "md"
@@ -28,7 +28,7 @@ public enum OutputType: String, CaseIterable, Codable {
     }
     
     // Directory name for each type
-    var directoryName: String {
+    public var directoryName: String {
         switch self {
         case .ocr: return "ocr"
         case .markdown: return "markdown"
@@ -38,7 +38,7 @@ public enum OutputType: String, CaseIterable, Codable {
     }
     
     // Description for logging and UI
-    var description: String {
+    public var description: String {
         switch self {
         case .ocr: return "OCR Text Output"
         case .markdown: return "Markdown Output"
@@ -50,7 +50,7 @@ public enum OutputType: String, CaseIterable, Codable {
 
 // MARK: - File Manager Protocol
 
-public protocol FileManaging {
+public protocol FileManaging: Sendable {
     // Stream lifecycle management with output type
     func openOutputStream(for inputFile: String, outputType: OutputType, append: Bool) throws -> OutputStream
     func closeOutputStream(_ stream: OutputStream) throws
@@ -66,7 +66,7 @@ public protocol FileManaging {
 
 // MARK: - File Manager Implementation
 
-public class MDKitFileManager: FileManaging {
+public final class MDKitFileManager: FileManaging {
     // MARK: - Properties
     
     private let config: FileManagementConfig

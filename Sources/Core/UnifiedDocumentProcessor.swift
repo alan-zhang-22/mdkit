@@ -100,14 +100,12 @@ public class UnifiedDocumentProcessor {
     
     /// Process a single document page with markdown generation and LLM optimization
     /// - Parameter imageData: Single page image data
-    /// - Parameter outputStream: OutputStream where the markdown will be written
     /// - Parameter pageNumber: Page number for this document (default: 1)
     /// - Parameter previousPageContext: Context from previous page for cross-page LLM optimization (optional)
     /// - Returns: DocumentProcessingResult with processing summary
     /// - Throws: DocumentProcessingError if processing fails
     public func processDocument(
         _ imageData: Data, 
-        outputStream: OutputStream, 
         pageNumber: Int = 1,
         previousPageContext: [DocumentElement] = []
     ) async throws -> DocumentProcessingResult {
@@ -151,9 +149,6 @@ public class UnifiedDocumentProcessor {
             optimizedMarkdown = pageMarkdown
         }
         
-        // Step 8: Write optimized markdown to output stream
-        try appendMarkdownToStream(optimizedMarkdown, to: outputStream, pageNumber: pageNumber)
-        
         let processingTime = Date().timeIntervalSince(startTime)
         
         let result = DocumentProcessingResult(
@@ -166,7 +161,6 @@ public class UnifiedDocumentProcessor {
         )
         
         logger.info("Page \(pageNumber) processing completed in \(String(format: "%.2f", processingTime))s")
-        logger.info("Markdown written to output stream")
         
         return result
     }
@@ -543,19 +537,8 @@ public class UnifiedDocumentProcessor {
         var previousPageContext: [DocumentElement] = [] // Keep last few paragraphs for cross-page context
         var allProcessedElements: [DocumentElement] = [] // Collect all elements for TOC generation
         
-        // Use FileManager to open output stream for markdown
-        let inputFileName = pdfURL.lastPathComponent
-        let outputStream = try fileManager.openOutputStream(
-            for: inputFileName, 
-            outputType: OutputType.markdown, 
-            append: false
-        )
-        defer {
-            try? fileManager.closeOutputStream(outputStream)
-        }
-        
-        // Write initial header through the FileManager
-        try fileManager.writeString("# Document Processing Results\n\n", to: outputStream)
+        // Note: Output generation is now handled by MainProcessor
+        // We just collect and return the elements
         
         // Process each page sequentially using processDocument
         for (pageIndex, pageImageData) in pageImages.enumerated() {
@@ -566,7 +549,6 @@ public class UnifiedDocumentProcessor {
                 // Process this page with cross-page context
                 let pageResult = try await processDocument(
                     pageImageData, 
-                    outputStream: outputStream, 
                     pageNumber: actualPageNumber,
                     previousPageContext: previousPageContext
                 )
@@ -590,9 +572,6 @@ public class UnifiedDocumentProcessor {
             }
         }
         
-        // Final step: Generate and append table of contents using FileManager
-        try await generateAndAppendTableOfContents(to: outputStream, from: allProcessedElements)
-        
         let processingTime = Date().timeIntervalSince(startTime)
         
         logger.info("DEBUG: allProcessedElements count before return: \(allProcessedElements.count)")
@@ -612,7 +591,6 @@ public class UnifiedDocumentProcessor {
         )
         
         logger.info("PDF processing completed in \(String(format: "%.2f", processingTime))s")
-        logger.info("Final markdown written using FileManager")
         
         return result
     }

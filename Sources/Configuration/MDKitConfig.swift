@@ -10,7 +10,7 @@ import Logging
 
 // MARK: - Main Configuration
 
-public struct MDKitConfig: Codable {
+public struct MDKitConfig: Codable, Sendable {
     public let processing: ProcessingConfig
     public let output: OutputConfig
     public let llm: LLMConfig
@@ -58,7 +58,7 @@ public struct MDKitConfig: Codable {
 
 // MARK: - Processing Configuration
 
-public struct ProcessingConfig: Codable {
+public struct ProcessingConfig: Codable, Sendable {
     public let overlapThreshold: Double
     public let enableHeaderFooterDetection: Bool
     public let headerRegion: [Double]
@@ -106,7 +106,7 @@ public struct ProcessingConfig: Codable {
 
 // MARK: - Language Detection Configuration
 
-public struct LanguageDetectionConfig: Codable {
+public struct LanguageDetectionConfig: Codable, Sendable {
     public let minimumTextLength: Int
     public let confidenceThreshold: Double
     public let enableMultilingualDetection: Bool
@@ -130,7 +130,7 @@ public struct LanguageDetectionConfig: Codable {
 
 // MARK: - Output Configuration
 
-public struct OutputConfig: Codable {
+public struct OutputConfig: Codable, Sendable {
     public let outputDirectory: String
     public let filenamePattern: String
     public let createLogFiles: Bool
@@ -152,7 +152,7 @@ public struct OutputConfig: Codable {
     }
 }
 
-public struct MarkdownConfig: Codable {
+public struct MarkdownConfig: Codable, Sendable {
     public let headerLevelOffset: Int
     public let useATXHeaders: Bool
     public let addTableOfContents: Bool
@@ -176,7 +176,7 @@ public struct MarkdownConfig: Codable {
 
 // MARK: - LLM Configuration
 
-public struct LLMConfig: Codable {
+public struct LLMConfig: Codable, Sendable {
     public let enabled: Bool
     public let backend: String
     public let modelPath: String
@@ -210,7 +210,7 @@ public struct LLMConfig: Codable {
     }
 }
 
-public struct ModelConfig: Codable {
+public struct ModelConfig: Codable, Sendable {
     public let identifier: String
     public let name: String
     public let type: String
@@ -232,7 +232,7 @@ public struct ModelConfig: Codable {
     }
 }
 
-public struct ProcessingParameters: Codable {
+public struct ProcessingParameters: Codable, Sendable {
     public let temperature: Double
     public let topP: Double
     public let topK: Int
@@ -266,7 +266,7 @@ public struct ProcessingParameters: Codable {
     }
 }
 
-public struct LLMOptions: Codable {
+public struct LLMOptions: Codable, Sendable {
     public let responseFormat: String
     public let verbose: Bool
     public let streaming: Bool
@@ -285,7 +285,7 @@ public struct LLMOptions: Codable {
     }
 }
 
-public struct ContextManagement: Codable {
+public struct ContextManagement: Codable, Sendable {
     public let maxContextLength: Int
     public let overlapLength: Int
     public let chunkSize: Int
@@ -307,7 +307,7 @@ public struct ContextManagement: Codable {
     }
 }
 
-public struct MemoryOptimization: Codable {
+public struct MemoryOptimization: Codable, Sendable {
     public let maxMemoryUsage: String
     public let enableStreaming: Bool
     public let cleanupAfterBatch: Bool
@@ -326,7 +326,7 @@ public struct MemoryOptimization: Codable {
     }
 }
 
-public struct PromptTemplates: Codable {
+public struct PromptTemplates: Codable, Sendable {
     public let languages: [String: LanguagePrompts]
     public let defaultLanguage: String
     public let fallbackLanguage: String
@@ -347,7 +347,7 @@ public struct PromptTemplates: Codable {
     }
 }
 
-public struct LanguagePrompts: Codable {
+public struct LanguagePrompts: Codable, Sendable {
     public let systemPrompt: [String]
     public let markdownOptimizationPrompt: [String]
     public let structureAnalysisPrompt: [String]?
@@ -379,7 +379,7 @@ public struct LanguagePrompts: Codable {
 
 // MARK: - Header Detection Configuration
 
-public struct HeaderDetectionConfig: Codable {
+public struct HeaderDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let sameLineTolerance: Double
     public let enableHeaderMerging: Bool
@@ -407,7 +407,7 @@ public struct HeaderDetectionConfig: Codable {
     }
 }
 
-public struct HeaderPatternsConfig: Codable {
+public struct HeaderPatternsConfig: Codable, Sendable {
     public let numberedHeaders: [String]
     public let letteredHeaders: [String]
     public let romanHeaders: [String]
@@ -426,7 +426,7 @@ public struct HeaderPatternsConfig: Codable {
     }
 }
 
-public struct HeaderLevelCalculationConfig: Codable {
+public struct HeaderLevelCalculationConfig: Codable, Sendable {
     public let autoCalculate: Bool
     public let maxLevel: Int
     public let customLevels: [String: Int]
@@ -444,7 +444,7 @@ public struct HeaderLevelCalculationConfig: Codable {
 
 // MARK: - List Detection Configuration
 
-public struct ListDetectionConfig: Codable {
+public struct ListDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let sameLineTolerance: Double
     public let enableListItemMerging: Bool
@@ -472,7 +472,7 @@ public struct ListDetectionConfig: Codable {
     }
 }
 
-public struct ListPatternsConfig: Codable {
+public struct ListPatternsConfig: Codable, Sendable {
     public let numberedMarkers: [String]
     public let letteredMarkers: [String]
     public let bulletMarkers: [String]
@@ -494,7 +494,7 @@ public struct ListPatternsConfig: Codable {
     }
 }
 
-public struct ListIndentationConfig: Codable {
+public struct ListIndentationConfig: Codable, Sendable {
     public let baseIndentation: Double
     public let levelThreshold: Double
     public let enableXCoordinateAnalysis: Bool
@@ -512,7 +512,7 @@ public struct ListIndentationConfig: Codable {
 
 // MARK: - Header Footer Detection Configuration
 
-public struct HeaderFooterDetectionConfig: Codable {
+public struct HeaderFooterDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let headerFrequencyThreshold: Double
     public let footerFrequencyThreshold: Double
@@ -540,7 +540,7 @@ public struct HeaderFooterDetectionConfig: Codable {
     }
 }
 
-public struct RegionBasedDetectionConfig: Codable {
+public struct RegionBasedDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let headerRegionY: Double
     public let footerRegionY: Double
@@ -559,7 +559,7 @@ public struct RegionBasedDetectionConfig: Codable {
     }
 }
 
-public struct PercentageBasedDetectionConfig: Codable {
+public struct PercentageBasedDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let headerRegionHeight: Double
     public let footerRegionHeight: Double
@@ -575,7 +575,7 @@ public struct PercentageBasedDetectionConfig: Codable {
     }
 }
 
-public struct SmartDetectionConfig: Codable {
+public struct SmartDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let excludePageNumbers: Bool
     public let excludeCommonHeaders: [String]
@@ -606,7 +606,7 @@ public struct SmartDetectionConfig: Codable {
     }
 }
 
-public struct MultiRegionDetectionConfig: Codable {
+public struct MultiRegionDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let maxRegions: Int
     
@@ -621,7 +621,7 @@ public struct MultiRegionDetectionConfig: Codable {
 
 // MARK: - Duplication Detection Configuration
 
-public struct DuplicationDetectionConfig: Codable {
+public struct DuplicationDetectionConfig: Codable, Sendable {
     public let enabled: Bool
     public let overlapThreshold: Double
     public let enableLogging: Bool
@@ -645,7 +645,7 @@ public struct DuplicationDetectionConfig: Codable {
 
 // MARK: - Position Sorting Configuration
 
-public struct PositionSortingConfig: Codable {
+public struct PositionSortingConfig: Codable, Sendable {
     public let sortBy: String
     public let tolerance: Double
     public let enableHorizontalSorting: Bool
@@ -666,7 +666,7 @@ public struct PositionSortingConfig: Codable {
 
 // MARK: - Markdown Generation Configuration
 
-public struct MarkdownGenerationConfig: Codable {
+public struct MarkdownGenerationConfig: Codable, Sendable {
     public let preservePageBreaks: Bool
     public let extractImages: Bool
     public let headerFormat: String
@@ -696,7 +696,7 @@ public struct MarkdownGenerationConfig: Codable {
 
 // MARK: - OCR Configuration
 
-public struct OCRConfig: Codable {
+public struct OCRConfig: Codable, Sendable {
     public let recognitionLevel: String
     public let languages: [String]
     public let useLanguageCorrection: Bool
@@ -735,7 +735,7 @@ public struct OCRConfig: Codable {
 
 // MARK: - Performance Configuration
 
-public struct PerformanceConfig: Codable {
+public struct PerformanceConfig: Codable, Sendable {
     public let maxMemoryUsage: String
     public let enableStreaming: Bool
     public let batchSize: Int
@@ -762,7 +762,7 @@ public struct PerformanceConfig: Codable {
 
 // MARK: - File Management Configuration
 
-public struct FileManagementConfig: Codable {
+public struct FileManagementConfig: Codable, Sendable {
     public let outputDirectory: String
     public let markdownDirectory: String
     public let logDirectory: String
@@ -795,7 +795,7 @@ public struct FileManagementConfig: Codable {
 
 // MARK: - Logging Configuration
 
-public struct LoggingConfig: Codable {
+public struct LoggingConfig: Codable, Sendable {
     public let enabled: Bool
     public let level: String
     public let outputFolder: String
@@ -826,7 +826,7 @@ public struct LoggingConfig: Codable {
     }
 }
 
-public struct LogCategories: Codable {
+public struct LogCategories: Codable, Sendable {
     public let ocrElements: LogCategory
     public let documentObservation: LogCategory
     public let markdownGeneration: LogCategory
@@ -848,7 +848,7 @@ public struct LogCategories: Codable {
     }
 }
 
-public struct LogCategory: Codable {
+public struct LogCategory: Codable, Sendable {
     public let enabled: Bool
     public let format: String
     public let includeBoundingBoxes: Bool?
@@ -897,7 +897,7 @@ public struct LogCategory: Codable {
     }
 }
 
-public struct LogFileNaming: Codable {
+public struct LogFileNaming: Codable, Sendable {
     public let pattern: String
     public let timestampFormat: String
     public let includeDocumentHash: Bool
