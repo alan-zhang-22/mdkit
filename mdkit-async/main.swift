@@ -124,43 +124,8 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
                 
                 do {
                     // Use MainProcessor directly for real PDF processing
-                    // Create custom configuration with element merging disabled and improved header detection
-                    let customConfig = MDKitConfig(
-                        processing: ProcessingConfig(
-                            enableElementMerging: false  // Disable element merging to prevent vertical merging issues
-                        ),
-                        headerFooterDetection: HeaderFooterDetectionConfig(
-                            enabled: true,
-                            headerFrequencyThreshold: 0.6,
-                            footerFrequencyThreshold: 0.6,
-                            regionBasedDetection: RegionBasedDetectionConfig(
-                                enabled: true,
-                                headerRegionY: 72.0,
-                                footerRegionY: 720.0,
-                                regionTolerance: 10.0
-                            ),
-                            percentageBasedDetection: PercentageBasedDetectionConfig(
-                                enabled: true,
-                                headerRegionHeight: 0.12,
-                                footerRegionHeight: 0.12
-                            ),
-                            smartDetection: SmartDetectionConfig(
-                                enabled: true,
-                                excludePageNumbers: true,
-                                excludeCommonHeaders: ["Page", "Chapter", "Section", "页", "章", "节", "GB/T 22239—2019"],  // Add the specific header to exclude
-                                excludeCommonFooters: ["Confidential", "Copyright", "All rights reserved", "机密", "版权", "版权所有"],
-                                enableContentAnalysis: true,
-                                enableContentBasedDetection: false,
-                                minHeaderFooterLength: 2,
-                                maxHeaderFooterLength: 150
-                            ),
-                            multiRegionDetection: MultiRegionDetectionConfig(
-                                enabled: false,
-                                maxRegions: 2
-                            )
-                        )
-                    )
-                    let mainProcessor = try MainProcessor(config: customConfig)
+                    // MainProcessor will load its own configuration via ConfigurationManager
+                    let mainProcessor = try MainProcessor()
                     
                     // Create processing options
                     let options = ProcessingOptions(
@@ -213,43 +178,8 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
                 
                 do {
                     // Use MainProcessor with minimal output
-                    // Create custom configuration with element merging disabled and improved header detection
-                    let customConfig = MDKitConfig(
-                        processing: ProcessingConfig(
-                            enableElementMerging: false  // Disable element merging to prevent vertical merging issues
-                        ),
-                        headerFooterDetection: HeaderFooterDetectionConfig(
-                            enabled: true,
-                            headerFrequencyThreshold: 0.6,
-                            footerFrequencyThreshold: 0.6,
-                            regionBasedDetection: RegionBasedDetectionConfig(
-                                enabled: true,
-                                headerRegionY: 72.0,
-                                footerRegionY: 720.0,
-                                regionTolerance: 10.0
-                            ),
-                            percentageBasedDetection: PercentageBasedDetectionConfig(
-                                enabled: true,
-                                headerRegionHeight: 0.12,
-                                footerRegionHeight: 0.12
-                            ),
-                            smartDetection: SmartDetectionConfig(
-                                enabled: true,
-                                excludePageNumbers: true,
-                                excludeCommonHeaders: ["Page", "Chapter", "Section", "页", "章", "节", "GB/T 22239—2019"],  // Add the specific header to exclude
-                                excludeCommonFooters: ["Confidential", "Copyright", "All rights reserved", "机密", "版权", "版权所有"],
-                                enableContentAnalysis: true,
-                                enableContentBasedDetection: false,
-                                minHeaderFooterLength: 2,
-                                maxHeaderFooterLength: 150
-                            ),
-                            multiRegionDetection: MultiRegionDetectionConfig(
-                                enabled: false,
-                                maxRegions: 2
-                            )
-                        )
-                    )
-                    let mainProcessor = try MainProcessor(config: customConfig)
+                    // MainProcessor will load its own configuration via ConfigurationManager
+                    let mainProcessor = try MainProcessor()
                     
                     let options = ProcessingOptions(
                         verbose: false,

@@ -164,8 +164,8 @@ public class ConfigurationManager: ConfigurationManaging {
             processing: ProcessingConfig(
                 overlapThreshold: 0.15,
                 enableHeaderFooterDetection: true,
-                headerRegion: [0.0, 0.12],
-                footerRegion: [0.88, 1.0],
+                pageHeaderRegion: [0.90, 1.0],
+                pageFooterRegion: [0.0, 0.1],
                 enableElementMerging: true,
                 mergeDistanceThreshold: 0.02,
                 isMergeDistanceNormalized: true,
@@ -509,15 +509,15 @@ public class ConfigurationManager: ConfigurationManaging {
             errors.append("Processing merge distance threshold must be non-negative")
         }
         
-        if config.processing.headerRegion.count == 2 {
-            if config.processing.headerRegion[0] < 0.0 || config.processing.headerRegion[1] > 1.0 {
-                errors.append("Processing header region must be between 0.0 and 1.0")
+        if config.processing.pageHeaderRegion.count == 2 {
+            if config.processing.pageHeaderRegion[0] < 0.0 || config.processing.pageHeaderRegion[1] > 1.0 {
+                errors.append("Processing page header region must be between 0.0 and 1.0")
             }
         }
         
-        if config.processing.footerRegion.count == 2 {
-            if config.processing.footerRegion[0] < 0.0 || config.processing.footerRegion[1] > 1.0 {
-                errors.append("Processing footer region must be between 0.0 and 1.0")
+        if config.processing.pageFooterRegion.count == 2 {
+            if config.processing.pageFooterRegion[0] < 0.0 || config.processing.pageFooterRegion[1] > 1.0 {
+                errors.append("Processing page footer region must be between 0.0 and 1.0")
             }
         }
         

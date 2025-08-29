@@ -341,7 +341,51 @@ public final class OutputGenerator: OutputGenerating {
             }
         }
         
-        logger.info("🎯 Filtering complete: \(elements.count) → \(filteredElements.count) elements (\(filteredCount) filtered out)")
+        logger.info("🎯 Header/footer filtering complete: \(elements.count) → \(filteredElements.count) elements (\(filteredCount) filtered out)")
+        
+        // Apply region-based filtering using pageHeaderRegion and pageFooterRegion
+        let finalFilteredElements = filterOutElementsByRegion(filteredElements)
+        
+        return finalFilteredElements
+    }
+    
+    /// Filter out elements based on their position in header and footer regions
+    private func filterOutElementsByRegion(_ elements: [DocumentElement]) -> [DocumentElement] {
+        guard config.processing.enableHeaderFooterDetection else {
+            return elements
+        }
+        
+        let headerRegion = config.processing.pageHeaderRegion
+        let footerRegion = config.processing.pageFooterRegion
+        
+        logger.info("🗺️ Starting region-based filtering:")
+        logger.info("   📍 Header region: Y=[\(headerRegion[0]), \(headerRegion[1])]")
+        logger.info("   📍 Footer region: Y=[\(footerRegion[0]), \(footerRegion[1])]")
+        
+        var filteredElements: [DocumentElement] = []
+        var filteredCount = 0
+        
+        for element in elements {
+            let elementY = element.boundingBox.minY
+            let elementHeight = element.boundingBox.height
+            let elementBottom = elementY + elementHeight
+            
+            // Check if element is in header region (top of page)
+            let isInHeaderRegion = elementY >= headerRegion[0] && elementY <= headerRegion[1]
+            
+            // Check if element is in footer region (bottom of page)
+            let isInFooterRegion = elementBottom >= footerRegion[0] && elementBottom <= footerRegion[1]
+            
+            if isInHeaderRegion || isInFooterRegion {
+                filteredCount += 1
+                let regionType = isInHeaderRegion ? "header" : "footer"
+                logger.debug("🗺️ Filtered out \(regionType) element: '\(element.text ?? "no text")' at Y=\(elementY)")
+            } else {
+                filteredElements.append(element)
+            }
+        }
+        
+        logger.info("🗺️ Region-based filtering complete: \(elements.count) → \(filteredElements.count) elements (\(filteredCount) filtered out)")
         return filteredElements
     }
     

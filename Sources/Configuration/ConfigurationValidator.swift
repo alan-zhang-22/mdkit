@@ -112,18 +112,18 @@ public struct ConfigurationValidator {
             throw ConfigurationValidationError.invalidOverlapThreshold(config.overlapThreshold)
         }
         
-        // Validate header region
-        if config.headerRegion.count == 2 {
-            if config.headerRegion[0] < 0.0 || config.headerRegion[1] > 1.0 {
-                let range = config.headerRegion[0]...config.headerRegion[1]
+        // Validate page header region
+        if config.pageHeaderRegion.count == 2 {
+            if config.pageHeaderRegion[0] < 0.0 || config.pageHeaderRegion[1] > 1.0 {
+                let range = config.pageHeaderRegion[0]...config.pageHeaderRegion[1]
                 throw ConfigurationValidationError.invalidHeaderRegion(range)
             }
         }
         
-        // Validate footer region
-        if config.footerRegion.count == 2 {
-            if config.footerRegion[0] < 0.0 || config.footerRegion[1] > 1.0 {
-                let range = config.footerRegion[0]...config.footerRegion[1]
+        // Validate page footer region
+        if config.pageFooterRegion.count == 2 {
+            if config.pageFooterRegion[0] < 0.0 || config.pageFooterRegion[1] > 1.0 {
+                let range = config.pageFooterRegion[0]...config.pageFooterRegion[1]
                 throw ConfigurationValidationError.invalidFooterRegion(range)
             }
         }
@@ -133,11 +133,11 @@ public struct ConfigurationValidator {
             throw ConfigurationValidationError.invalidMaxMergeDistance(config.mergeDistanceThreshold)
         }
         
-        // Validate that header and footer regions don't overlap
-        if config.headerRegion.count == 2 && config.footerRegion.count == 2 {
-            if config.headerRegion[1] > config.footerRegion[0] {
+        // Validate that page header and footer regions don't overlap
+        if config.pageHeaderRegion.count == 2 && config.pageFooterRegion.count == 2 {
+            if config.pageHeaderRegion[1] > config.pageFooterRegion[0] {
                 throw ConfigurationValidationError.conflictingConfigurations([
-                    "Header region (\(config.headerRegion)) overlaps with footer region (\(config.footerRegion))"
+                    "Page header region (\(config.pageHeaderRegion)) overlaps with page footer region (\(config.pageFooterRegion))"
                 ])
             }
         }

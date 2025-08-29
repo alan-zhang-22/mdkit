@@ -828,15 +828,15 @@ public class UnifiedDocumentProcessor {
         // Since we're working with normalized coordinates from Vision, we can use Y directly
         let normalizedY = boundingBox.minY
         
-        // Check if element is in header region (top of page)
-        if config.processing.headerRegion.contains(normalizedY) {
-            logger.debug("Element detected as header at Y position \(normalizedY)")
+        // Check if element is in page header region (top of page)
+        if config.processing.pageHeaderRegion.contains(normalizedY) {
+            logger.debug("Element detected as page header at Y position \(normalizedY)")
             return .header
         }
         
-        // Check if element is in footer region (bottom of page)
-        if config.processing.footerRegion.contains(normalizedY) {
-            logger.debug("Element detected as footer at Y position \(normalizedY)")
+        // Check if element is in page footer region (bottom of page)
+        if config.processing.pageFooterRegion.contains(normalizedY) {
+            logger.debug("Element detected as page footer at Y position \(normalizedY)")
             return .footer
         }
         

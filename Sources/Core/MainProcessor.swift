@@ -85,6 +85,14 @@ public class MainProcessor {
         logger.info("MainProcessor initialized successfully")
     }
     
+    /// Initialize the main processor with default configuration loaded from file
+    /// Uses ConfigurationManager to load development configuration
+    public convenience init() throws {
+        let configManager = ConfigurationManager()
+        let config = try configManager.loadConfigurationFromResources(fileName: "dev-config.json")
+        try self.init(config: config)
+    }
+    
     // MARK: - Main Processing Methods
     
     /// Process a single PDF file

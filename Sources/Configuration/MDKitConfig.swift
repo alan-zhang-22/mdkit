@@ -61,8 +61,8 @@ public struct MDKitConfig: Codable, Sendable {
 public struct ProcessingConfig: Codable, Sendable {
     public let overlapThreshold: Double
     public let enableHeaderFooterDetection: Bool
-    public let headerRegion: [Double]
-    public let footerRegion: [Double]
+    public let pageHeaderRegion: [Double]
+    public let pageFooterRegion: [Double]
     public let enableElementMerging: Bool
     public let mergeDistanceThreshold: Double
     public let isMergeDistanceNormalized: Bool
@@ -76,8 +76,8 @@ public struct ProcessingConfig: Codable, Sendable {
     public init(
         overlapThreshold: Double = 0.15,
         enableHeaderFooterDetection: Bool = true,
-        headerRegion: [Double] = [0.0, 0.12],
-        footerRegion: [Double] = [0.88, 1.0],
+        pageHeaderRegion: [Double] = [0.0, 0.12],
+        pageFooterRegion: [Double] = [0.88, 1.0],
         enableElementMerging: Bool = true,
         mergeDistanceThreshold: Double = 0.02,
         isMergeDistanceNormalized: Bool = true,
@@ -90,8 +90,8 @@ public struct ProcessingConfig: Codable, Sendable {
     ) {
         self.overlapThreshold = overlapThreshold
         self.enableHeaderFooterDetection = enableHeaderFooterDetection
-        self.headerRegion = headerRegion
-        self.footerRegion = footerRegion
+        self.pageHeaderRegion = pageHeaderRegion
+        self.pageFooterRegion = pageFooterRegion
         self.enableElementMerging = enableElementMerging
         self.mergeDistanceThreshold = mergeDistanceThreshold
         self.isMergeDistanceNormalized = isMergeDistanceNormalized
