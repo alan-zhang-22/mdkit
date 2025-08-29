@@ -532,10 +532,11 @@ public class UnifiedDocumentProcessor {
         let startTime = Date()
         
         logger.info("Starting PDF processing: \(pdfURL.lastPathComponent)")
+        logger.info("DEBUG: Page range parameter: \(pageRange ?? "nil")")
         
-        // Convert PDF pages to images
-        let pageImages = try await convertPDFToImages(pdfURL, pageRange: pageRange)
-        logger.info("PDF converted to \(pageImages.count) page images")
+        // Convert PDF pages to images and get the actual page numbers
+        let (pageImages, actualPageNumbers) = try await convertPDFToImagesWithPageNumbers(pdfURL, pageRange: pageRange)
+        logger.info("PDF converted to \(pageImages.count) page images for pages: \(actualPageNumbers)")
         
         var totalDuplicatesRemoved = 0
         var warnings: [String] = []
@@ -558,15 +559,15 @@ public class UnifiedDocumentProcessor {
         
         // Process each page sequentially using processDocument
         for (pageIndex, pageImageData) in pageImages.enumerated() {
-            let pageNumber = pageIndex + 1
-            logger.info("Processing PDF page \(pageNumber) of \(pageImages.count)")
+            let actualPageNumber = actualPageNumbers[pageIndex]
+            logger.info("Processing PDF page \(actualPageNumber) of \(pageImages.count)")
             
             do {
                 // Process this page with cross-page context
                 let pageResult = try await processDocument(
                     pageImageData, 
                     outputStream: outputStream, 
-                    pageNumber: pageNumber,
+                    pageNumber: actualPageNumber,
                     previousPageContext: previousPageContext
                 )
                 
@@ -579,10 +580,10 @@ public class UnifiedDocumentProcessor {
                 // Collect all elements for TOC generation
                 allProcessedElements.append(contentsOf: pageResult.elements)
                 
-                logger.info("PDF page \(pageNumber) completed successfully")
+                logger.info("PDF page \(actualPageNumber) completed successfully")
                 
             } catch {
-                let warning = "PDF page \(pageNumber) failed: \(error.localizedDescription)"
+                let warning = "PDF page \(actualPageNumber) failed: \(error.localizedDescription)"
                 logger.warning("\(warning)")
                 warnings.append(warning)
                 // Continue with next page instead of failing completely
@@ -594,11 +595,18 @@ public class UnifiedDocumentProcessor {
         
         let processingTime = Date().timeIntervalSince(startTime)
         
+        logger.info("DEBUG: allProcessedElements count before return: \(allProcessedElements.count)")
+        logger.info("DEBUG: allProcessedElements first few: \(Array(allProcessedElements.prefix(3)))")
+        
+        // Create a copy of the elements to ensure they're not modified
+        let elementsToReturn = Array(allProcessedElements)
+        logger.info("DEBUG: elementsToReturn count: \(elementsToReturn.count)")
+        
         let result = DocumentProcessingResult(
-            elements: [], // We don't keep all elements in memory
+            elements: elementsToReturn, // Return all processed elements for MainProcessor
             processingTime: processingTime,
             pageCount: pageImages.count,
-            totalElements: 0, // Not applicable since we write to file
+            totalElements: elementsToReturn.count, // Count of all elements
             duplicatesRemoved: totalDuplicatesRemoved,
             warnings: warnings
         )
@@ -617,6 +625,53 @@ public class UnifiedDocumentProcessor {
         // For now, we'll throw an error indicating this needs implementation
         
         throw DocumentProcessingError.unsupportedOperation("PDF to image conversion not yet implemented")
+    }
+    
+    /// Convert PDF pages to image data and return both images and actual page numbers
+    @available(macOS 26.0, *)
+    private func convertPDFToImagesWithPageNumbers(_ pdfURL: URL, pageRange: String? = nil) async throws -> (images: [Data], pageNumbers: [Int]) {
+        // Get PDF information
+        let (pageCount, pdfDocument) = try getPDFInfo(from: pdfURL)
+        
+        // Parse page range
+        logger.info("DEBUG: convertPDFToImagesWithPageNumbers called with pageRange: '\(pageRange ?? "nil")' and totalPages: \(pageCount)")
+        let pagesToProcess = try parsePageRange(pageRange, totalPages: pageCount)
+        logger.info("Processing \(pagesToProcess.count) pages: \(pagesToProcess)")
+        
+        var pageImages: [Data] = []
+        var pageNumbers: [Int] = []
+        
+        for pageNumber in pagesToProcess {
+            let pageIndex = pageNumber - 1 // Convert to 0-indexed
+            
+            guard let page = pdfDocument.page(at: pageIndex) else {
+                logger.warning("Failed to get page \(pageNumber), skipping")
+                continue
+            }
+            
+            do {
+                // Convert PDF page to image
+                let image = try convertPDFPageToImage(page)
+                
+                // Convert NSImage to Data
+                let imageData = try convertNSImageToData(image)
+                
+                pageImages.append(imageData)
+                pageNumbers.append(pageNumber) // Store the actual page number
+                logger.debug("Successfully converted page \(pageNumber) to image (\(imageData.count) bytes)")
+                
+            } catch {
+                logger.warning("Failed to convert page \(pageNumber): \(error.localizedDescription)")
+                // Continue with other pages instead of failing completely
+            }
+        }
+        
+        guard !pageImages.isEmpty else {
+            throw DocumentProcessingError.unsupportedOperation("No pages were successfully converted to images")
+        }
+        
+        logger.info("Successfully converted \(pageImages.count) pages to images")
+        return (pageImages, pageNumbers)
     }
     
     // MARK: - Vision Framework Integration

@@ -90,7 +90,8 @@ public class MainProcessor {
     public func processPDF(
         inputPath: String,
         outputPath: String? = nil,
-        options: ProcessingOptions = ProcessingOptions()
+        options: ProcessingOptions = ProcessingOptions(),
+        pageRange: String? = nil
     ) async throws -> ProcessingResult {
         
         let startTime = Date()
@@ -106,34 +107,34 @@ public class MainProcessor {
             // Step 2: Process the PDF document
             let pdfURL = URL(fileURLWithPath: inputPath)
             let outputURL = URL(fileURLWithPath: "\(config.output.outputDirectory)/temp_output.md")
-            let processingResult = try await documentProcessor.processPDF(pdfURL, outputFileURL: outputURL)
-            let documentElements = processingResult.elements
             
-            // Step 3: Generate initial markdown
-            let initialMarkdown = try generateMarkdown(from: documentElements)
+            // Process the PDF - UnifiedDocumentProcessor now returns elements
+            let processingResult = try await documentProcessor.processPDF(pdfURL, outputFileURL: outputURL, pageRange: pageRange)
+            
+            // Step 3: Generate markdown from the returned elements
+            let initialMarkdown = try generateMarkdown(from: processingResult.elements)
             
             // Step 4: Optimize markdown using LLM if enabled
-            let optimizedMarkdown = try await optimizeMarkdown(initialMarkdown, elements: documentElements)
+            let optimizedMarkdown = try await optimizeMarkdown(initialMarkdown, elements: processingResult.elements)
             
-            // Step 5: Write output
+            // Step 5: Write final output
             let finalOutputPath = try writeOutput(
                 markdown: optimizedMarkdown,
                 inputPath: inputPath,
                 outputPath: outputPath
             )
             
-                                    // Step 6: Update statistics with language information
-                        let processingTime = Date().timeIntervalSince(startTime)
-                        let documentText = documentElements.compactMap { $0.text }.joined(separator: " ")
-                        let detectedLanguage = languageDetector.detectLanguage(from: documentText)
-                        
-                        processingStats.update(
-                            inputPath: inputPath,
-                            outputPath: finalOutputPath,
-                            processingTime: processingTime,
-                            elementCount: documentElements.count,
-                            detectedLanguage: detectedLanguage
-                        )
+            // Step 6: Update statistics
+            let processingTime = Date().timeIntervalSince(startTime)
+            let detectedLanguage = languageDetector.detectLanguage(from: optimizedMarkdown)
+            
+            processingStats.update(
+                inputPath: inputPath,
+                outputPath: finalOutputPath,
+                processingTime: processingTime,
+                elementCount: processingResult.elements.count, // Actual element count
+                detectedLanguage: detectedLanguage
+            )
             
             logger.info("PDF processing completed successfully in \(String(format: "%.2f", processingTime))s")
             
@@ -142,7 +143,7 @@ public class MainProcessor {
                 inputPath: inputPath,
                 outputPath: finalOutputPath,
                 processingTime: processingTime,
-                elementCount: documentElements.count,
+                elementCount: processingResult.elements.count,
                 statistics: processingStats
             )
             
@@ -237,7 +238,7 @@ public class MainProcessor {
         
         logger.info("Detected document language: \(detectedLanguage)")
         
-        // Generate markdown with language context
+        // Generate markdown using the markdown generator
         let markdown = try markdownGenerator.generateMarkdown(from: elements)
         
         // Add language metadata to the markdown
@@ -245,6 +246,8 @@ public class MainProcessor {
         
         return markdown + languageHeader
     }
+    
+
     
     /// Optimize markdown using LLM if enabled
     private func optimizeMarkdown(_ markdown: String, elements: [DocumentElement]) async throws -> String {
