@@ -7,7 +7,9 @@
 
 import Foundation
 import CoreGraphics
+import Logging
 import mdkitConfiguration
+import mdkitLogging
 
 /// Represents a single element extracted from a document using Apple's Vision framework
 public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
@@ -183,82 +185,155 @@ extension DocumentElement {
     /// Whether this element can be merged with another
     public func canMerge(with other: DocumentElement, config: mdkitConfiguration.ProcessingConfig? = nil) -> Bool {
         // Both elements must be mergeable types
-        guard type.isMergeable && other.type.isMergeable else { return false }
+        guard type.isMergeable && other.type.isMergeable else { 
+            Logger(label: "DocumentElement").info("🔍 CANMERGE: ❌ Type mismatch - \(type) vs \(other.type)")
+            return false 
+        }
         
         // Elements must be on the same page
-        guard pageNumber == other.pageNumber else { return false }
-        
-        // Check if elements are on the same line or side by side
-        // Use a reasonable tolerance that accounts for font variations
-        let isSameLine = boundingBox.isVerticallyAligned(with: other.boundingBox, tolerance: 0.08) // Same line (8% tolerance)
-        let isSideBySide = boundingBox.isHorizontallyAligned(with: other.boundingBox, tolerance: 0.08) // Side by side (8% tolerance)
-        
-        // Calculate distance
-        let distance = mergeDistance(to: other)
-        
-        // Override alignment classification if distance is too large
-        // This prevents elements that are far apart from being considered "same line"
-        let effectiveIsSameLine = isSameLine && distance <= 0.15 // Max 15% distance for same line
-        let effectiveIsSideBySide = isSideBySide && distance <= 0.15 // Max 15% distance for side by side
-        
-        if let config = config {
-            if effectiveIsSameLine {
-                // Same line merging: much more permissive (e.g., "5.1.2" and "Access Control")
-                if config.isHorizontalMergeThresholdNormalized {
-                    return distance <= Float(config.horizontalMergeThreshold)
-                } else {
-                    // For absolute point thresholds, convert normalized distance to points
-                    let documentWidth = 612.0 // Standard PDF page width (8.5 inches at 72 DPI)
-                    let distanceInPoints = distance * Float(documentWidth)
-                    return distanceInPoints <= Float(config.horizontalMergeThreshold)
-                }
-            } else if effectiveIsSideBySide {
-                // Side by side merging: use standard threshold
-                if config.isMergeDistanceNormalized {
-                    return distance <= Float(config.mergeDistanceThreshold)
-                } else {
-                    // For absolute point thresholds, convert normalized distance to points
-                    // Standard PDF page height is 792 points (11 inches at 72 DPI)
-                    let documentHeight = 792.0
-                    let distanceInPoints = distance * Float(documentHeight)
-                    return distanceInPoints <= Float(config.mergeDistanceThreshold)
-                }
-            } else {
-                // Diagonal merging: use the more restrictive threshold
-                let threshold = min(config.horizontalMergeThreshold, config.mergeDistanceThreshold)
-                if config.isMergeDistanceNormalized {
-                    return distance <= Float(threshold)
-                } else {
-                    // Use document height for diagonal calculations
-                    let documentHeight = 792.0
-                    let distanceInPoints = distance * Float(documentHeight)
-                    return distanceInPoints <= Float(threshold)
-                }
-            }
-        } else {
-            // Default behavior: use horizontal threshold for same line, vertical for side by side
-            if isSameLine {
-                return distance <= 0.15 // 15% of document width for same line
-            } else {
-                return distance <= 0.02 // 2% of document height for side by side
-            }
+        guard pageNumber == other.pageNumber else { 
+            Logger(label: "DocumentElement").info("🔍 CANMERGE: ❌ Different pages - \(pageNumber) vs \(other.pageNumber)")
+            return false 
         }
+        
+        let logger = Logger(label: "DocumentElement")
+        logger.info("🔍 CANMERGE: Checking merge between:")
+        logger.info("   📝 Element 1: '\(text ?? "nil")' (Type: \(type))")
+        logger.info("   📝 Element 2: '\(other.text ?? "nil")' (Type: \(other.type))")
+        
+        // RULE 1: Same line merging - ALWAYS merge regardless of distance
+        // Use a tighter tolerance to prevent incorrect same-line detection
+        let isSameLine = boundingBox.isVerticallyAligned(with: other.boundingBox, tolerance: 0.005) // Same line (0.5% tolerance)
+        
+        if isSameLine {
+            logger.info("🔍 CANMERGE: ✅ RULE 1 - Same line elements, ALWAYS merge")
+            return true
+        }
+        
+        logger.info("🔍 CANMERGE: ❌ Not same line, checking RULE 2...")
+        
+        // RULE 2: Cross-line merging - only for incomplete paragraphs + non-headers
+        // Check if current element is a paragraph that doesn't end with full stop
+        let isIncompleteParagraph = isIncompleteParagraph()
+        let nextElementIsNotHeader = !other.isHeaderElement()
+        
+        logger.info("🔍 CANMERGE: RULE 2 checks:")
+        logger.info("   📝 Is incomplete paragraph: \(isIncompleteParagraph)")
+        logger.info("   📝 Next element is not header: \(nextElementIsNotHeader)")
+        
+        if isIncompleteParagraph && nextElementIsNotHeader {
+            // Calculate vertical distance for cross-line merging
+            let verticalDistance = abs(boundingBox.maxY - other.boundingBox.minY)
+            let documentHeight = 792.0 // Standard PDF page height
+            let normalizedVerticalDistance = Float(verticalDistance / documentHeight)
+            
+            logger.info("🔍 CANMERGE: RULE 2 - Cross-line merging:")
+            logger.info("   📏 Vertical distance: \(verticalDistance)px")
+            logger.info("   📏 Normalized distance: \(normalizedVerticalDistance)")
+            logger.info("   📏 Threshold: 0.05")
+            
+            // Allow cross-line merging if elements are reasonably close
+            let canMergeCrossLine = normalizedVerticalDistance <= 0.05
+            logger.info("🔍 CANMERGE: RULE 2 result: \(canMergeCrossLine ? "✅ ALLOW" : "❌ DENY")")
+            return canMergeCrossLine
+        }
+        
+        logger.info("🔍 CANMERGE: ❌ No rules satisfied, cannot merge")
+        // No other merging scenarios allowed
+        return false
+    }
+    
+    /// Checks if this element is an incomplete paragraph (doesn't end with full stop)
+    private func isIncompleteParagraph() -> Bool {
+        guard let text = self.text, !text.isEmpty else { return false }
+        
+        // Check if text ends with Chinese or English full stop symbols
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Chinese full stops: 。，；：！？
+        // English full stops: .,;:!?
+        let fullStopSymbols = ["。", "，", "；", "：", "！", "？", ".", ",", ";", ":", "!", "?"]
+        
+        return !fullStopSymbols.contains { trimmedText.hasSuffix($0) }
+    }
+    
+    /// Checks if this element is a header element
+    private func isHeaderElement() -> Bool {
+        // Check if element type is header
+        if type == .title || type == .header { // Changed from .heading to .header
+            return true
+        }
+        
+        // Check if text content looks like a header
+        guard let text = self.text, !text.isEmpty else { return false }
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Pattern for Chinese section headers: "8.1.4.2 访问控制"
+        let headerPattern = #"^\d+\.?\d*\.?\d*\s+[^\s]+$"#
+        if trimmedText.range(of: headerPattern, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // Pattern for numbered lists: "a)", "b)", "1)", "2)", etc.
+        let listPattern = #"^[a-zA-Z0-9]+\)"#
+        if trimmedText.range(of: listPattern, options: .regularExpression) != nil {
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Checks if this element starts a list item
+    private func isListStart() -> Bool {
+        guard let text = self.text, !text.isEmpty else { return false }
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Pattern for standalone list items: "a)", "b)", "c)", "1)", "2)", "3)", etc.
+        // These should be at the beginning of the text with minimal content
+        let standaloneListPattern = #"^[a-zA-Z0-9]+\)\s*$"#
+        if trimmedText.range(of: standaloneListPattern, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // Pattern for Chinese standalone list items: "a）", "b）", "1）", "2）", etc.
+        let chineseStandaloneListPattern = #"^[a-zA-Z0-9]+）\s*$"#
+        if trimmedText.range(of: chineseStandaloneListPattern, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // Pattern for list items with minimal content: "a) text", "b) text", "1) text", etc.
+        // But only if the text after the marker is very short (less than 10 characters)
+        let shortListPattern = #"^[a-zA-Z0-9]+\)\s*[^\s]{1,10}$"#
+        if trimmedText.range(of: shortListPattern, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // Pattern for Chinese list items with minimal content: "a）text", "b）text", "1）text", etc.
+        // But only if the text after the marker is very short (less than 10 characters)
+        let chineseShortListPattern = #"^[a-zA-Z0-9]+）\s*[^\s]{1,10}$"#
+        if trimmedText.range(of: chineseShortListPattern, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // If the text is longer and contains substantial content after the marker,
+        // it's likely not a list item but regular text that happens to start with a marker
+        return false
     }
 }
 
 // MARK: - Comparable Conformance
 
 extension DocumentElement: Comparable {
-    /// Compare elements by position (top to bottom, left to right)
+    /// Compare elements by position (top to bottom, left to right) - CORRECT for merge order
     public static func < (lhs: DocumentElement, rhs: DocumentElement) -> Bool {
         // First by page number
         if lhs.pageNumber != rhs.pageNumber {
             return lhs.pageNumber < rhs.pageNumber
         }
         
-        // Then by Y position (top to bottom)
+        // Then by Y position (top to bottom) - REVERSED for correct processing order
         if abs(lhs.boundingBox.minY - rhs.boundingBox.minY) > 5.0 {
-            return lhs.boundingBox.minY < rhs.boundingBox.minY
+            return lhs.boundingBox.minY > rhs.boundingBox.minY
         }
         
         // Finally by X position (left to right)

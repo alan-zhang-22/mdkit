@@ -61,16 +61,16 @@ public class MainProcessor {
         // Initialize output generator for multiple output types
         self.outputGenerator = OutputGenerator(config: config)
         
-        // Initialize document processor
-        self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager, markdownGenerator: markdownGenerator)
-        
-        // Initialize language detector
+        // Initialize language detector first
         let minimumTextLength = config.processing.languageDetection?.minimumTextLength ?? 10
         let confidenceThreshold = config.processing.languageDetection?.confidenceThreshold ?? 0.6
         self.languageDetector = LanguageDetector(
             minimumTextLength: minimumTextLength,
             confidenceThreshold: confidenceThreshold
         )
+        
+        // Initialize document processor (now languageDetector is available)
+        self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager, markdownGenerator: markdownGenerator, languageDetector: languageDetector)
         
         // Initialize LLM processor if enabled
         if config.llm.enabled {

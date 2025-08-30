@@ -7,6 +7,7 @@ import AppKit
 import CoreImage
 import mdkitConfiguration
 import mdkitFileManagement
+import mdkitProtocols
 
 // MARK: - Document Processing Error
 
@@ -77,23 +78,31 @@ public class UnifiedDocumentProcessor {
     private let logger: Logger
     private let overlapDetector: SimpleOverlapDetector
     private let markdownGenerator: MarkdownGenerator
-    private let fileManager: FileManaging
+    private let fileManager: mdkitFileManagement.FileManaging
+    private let headerAndListDetector: HeaderAndListDetector
+    private let languageDetector: LanguageDetecting
     
     // MARK: - Initialization
     
-    public init(config: MDKitConfig, fileManager: FileManaging, markdownGenerator: MarkdownGenerator) {
+    public init(config: MDKitConfig, fileManager: mdkitFileManagement.FileManaging, markdownGenerator: MarkdownGenerator, languageDetector: LanguageDetecting) {
         self.config = config
         self.fileManager = fileManager
         self.markdownGenerator = markdownGenerator
+        self.languageDetector = languageDetector
         self.logger = Logger(label: "UnifiedDocumentProcessor")
         self.overlapDetector = SimpleOverlapDetector(config: config)
+        self.headerAndListDetector = HeaderAndListDetector(config: config)
     }
     
-    // Convenience initializer that creates a default FileManager and MarkdownGenerator
+    // Convenience initializer that creates a default FileManager, MarkdownGenerator, and LanguageDetector
     public convenience init(config: MDKitConfig) {
         let defaultFileManager = MDKitFileManager(config: config.fileManagement)
         let defaultMarkdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
-        self.init(config: config, fileManager: defaultFileManager, markdownGenerator: defaultMarkdownGenerator)
+        let defaultLanguageDetector = LanguageDetector(
+            minimumTextLength: config.processing.languageDetection?.minimumTextLength ?? 10,
+            confidenceThreshold: config.processing.languageDetection?.confidenceThreshold ?? 0.6
+        )
+        self.init(config: config, fileManager: defaultFileManager, markdownGenerator: defaultMarkdownGenerator, languageDetector: defaultLanguageDetector)
     }
     
     // MARK: - Main Processing Method
@@ -118,21 +127,39 @@ public class UnifiedDocumentProcessor {
         let pageElements = try await extractDocumentElements(imageData: imageData)
         logger.debug("Page \(pageNumber): extracted \(pageElements.count) elements")
         
-        // Step 2: Update page numbers for all elements from this page
+        // Step 2: Detect document language once from all extracted text
+        let documentLanguage = detectDocumentLanguage(from: pageElements)
+        
+        // LOGGING: Log original elements before any processing
+        logger.info("==================================================================================")
+        logger.info("📋 ORIGINAL ELEMENTS (BEFORE PROCESSING)")
+        logger.info("==================================================================================")
+        for (index, element) in pageElements.enumerated() {
+            logger.info("📝 Element \(index): '\(element.text ?? "NO_TEXT")' (Type: \(element.type))")
+            logger.info("   📍 Region: \(element.boundingBox) (X: \(String(format: "%.4f", element.boundingBox.minX))-\(String(format: "%.4f", element.boundingBox.maxX)), Y: \(String(format: "%.4f", element.boundingBox.minY))-\(String(format: "%.4f", element.boundingBox.maxY)))")
+            logger.info("   📄 Page: \(element.pageNumber)")
+        }
+        logger.info("==================================================================================")
+        
+        // Step 3: Update page numbers for all elements from this page
         let updatedElements = pageElements.map { element in
             element.updating(pageNumber: pageNumber)
         }
         
-        // Step 3: Sort elements by position within this page only
+        // Step 4: Sort elements by position within this page only
         let sortedElements = sortElementsByPositionWithinPage(updatedElements)
         
-        // Step 4: Remove duplicates within this page
+        // Step 5: Remove duplicates within this page
         let (deduplicatedElements, duplicatesRemoved) = await removeDuplicates(sortedElements)
         
-        // Step 5: Merge nearby elements if enabled
+        // Step 6: Filter out page headers and footers BEFORE merging
+        let filteredElements = filterOutPageHeadersAndFooters(deduplicatedElements)
+        logger.info("🎯 Page header/footer filtering: \(deduplicatedElements.count) → \(filteredElements.count) elements")
+        
+        // Step 7: Merge nearby elements if enabled (passing the detected language)
         let mergedElements = config.processing.enableElementMerging ? 
-            await mergeNearbyElements(deduplicatedElements) : 
-            deduplicatedElements
+            await mergeNearbyElements(filteredElements, documentLanguage: documentLanguage) : 
+            filteredElements
         
         // Step 6: Generate markdown for this page
         let pageMarkdown = try markdownGenerator.generateMarkdown(from: mergedElements)
@@ -673,7 +700,10 @@ public class UnifiedDocumentProcessor {
             throw DocumentProcessingError.noTextFound
         }
         
-        return documentElements
+        // Post-process extracted text to remove unnecessary spaces based on language
+        let cleanedElements = cleanExtractedText(documentElements)
+        
+        return cleanedElements
     }
     
 
@@ -828,19 +858,50 @@ public class UnifiedDocumentProcessor {
         // Since we're working with normalized coordinates from Vision, we can use Y directly
         let normalizedY = boundingBox.minY
         
-        // Check if element is in page header region (top of page)
+        // Check if element is in page header region (top of page) - these should be FILTERED OUT
         if config.processing.pageHeaderRegion.contains(normalizedY) {
-            logger.debug("Element detected as page header at Y position \(normalizedY)")
-            return .header
+            logger.debug("Element detected as page header at Y position \(normalizedY) - will be filtered out")
+            return .header // This will be filtered out later
         }
         
-        // Check if element is in page footer region (bottom of page)
+        // Check if element is in page footer region (bottom of page) - these should be FILTERED OUT
         if config.processing.pageFooterRegion.contains(normalizedY) {
-            logger.debug("Element detected as page footer at Y position \(normalizedY)")
-            return .footer
+            logger.debug("Element detected as page footer at Y position \(normalizedY) - will be filtered out")
+            return .footer // This will be filtered out later
         }
         
-        // Return original type if not in header/footer regions
+        // IMPORTANT: Use HeaderAndListDetector to detect chapter headers and list items
+        // This ensures proper detection based on configuration file patterns
+        let textContent = text.transcript
+        
+        // Create a temporary DocumentElement for detection
+        let tempElement = DocumentElement(
+            type: originalType,
+            boundingBox: boundingBox,
+            contentData: textContent.data(using: .utf8) ?? Data(),
+            confidence: 1.0,
+            pageNumber: 1, // Will be set correctly later
+            text: textContent,
+            metadata: [:]
+        )
+        
+        // Use HeaderAndListDetector to detect headers
+        let headerResult = headerAndListDetector.detectHeader(in: tempElement)
+        
+        if headerResult.isHeader {
+            logger.debug("Element detected as chapter header (preserve): '\(textContent)' - Level: \(headerResult.level), Confidence: \(headerResult.confidence)")
+            return .header // Use .header type to prevent merging and preserve structure
+        }
+        
+        // Use HeaderAndListDetector to detect list items
+        let listResult = headerAndListDetector.detectListItem(in: tempElement)
+        
+        if listResult.isListItem {
+            logger.debug("Element detected as list item (preserve): '\(textContent)' - Level: \(listResult.level), Confidence: \(listResult.confidence)")
+            return .listItem // Use .listItem type to prevent merging and preserve structure
+        }
+        
+        // Return original type if not in header/footer regions and not a chapter header or list item
         return originalType
     }
     
@@ -951,9 +1012,9 @@ public class UnifiedDocumentProcessor {
     /// Sort elements by position within a single page
     internal func sortElementsByPositionWithinPage(_ elements: [DocumentElement]) -> [DocumentElement] {
         return elements.sorted { first, second in
-            // Primary sort: Y position (top to bottom)
+            // Primary sort: Y position (top to bottom) - REVERSED for correct processing order
             if abs(first.boundingBox.midY - second.boundingBox.midY) > 0.01 {
-                return first.boundingBox.midY < second.boundingBox.midY
+                return first.boundingBox.midY > second.boundingBox.midY
             }
             
             // Secondary sort: X position (left to right)
@@ -970,7 +1031,7 @@ public class UnifiedDocumentProcessor {
     
     // MARK: - Element Merging
     
-    private func mergeNearbyElements(_ elements: [DocumentElement]) async -> [DocumentElement] {
+    private func mergeNearbyElements(_ elements: [DocumentElement], documentLanguage: String) async -> [DocumentElement] {
         guard !elements.isEmpty else { return elements }
         
         logger.debug("Starting element merging for \(elements.count) elements")
@@ -986,7 +1047,7 @@ public class UnifiedDocumentProcessor {
             let sortedPageElements = sortElementsByPositionWithinPage(pageElements)
             
             // Merge elements on this page
-            let mergedPageElements = await mergeElementsOnPage(sortedPageElements)
+            let mergedPageElements = await mergeElementsOnPage(sortedPageElements, documentLanguage: documentLanguage)
             mergedElements.append(contentsOf: mergedPageElements)
             
             logger.debug("Page \(pageNumber): merged \(pageElements.count) elements into \(mergedPageElements.count) elements")
@@ -999,52 +1060,59 @@ public class UnifiedDocumentProcessor {
     }
     
     /// Merges elements within a single page
-    private func mergeElementsOnPage(_ elements: [DocumentElement]) async -> [DocumentElement] {
+    /// Only merges adjacent elements in Y-coordinate order to preserve document structure
+    private func mergeElementsOnPage(_ elements: [DocumentElement], documentLanguage: String) async -> [DocumentElement] {
         guard elements.count > 1 else { return elements }
         
-        var mergedElements: [DocumentElement] = []
-        var processedIndices: Set<Int> = []
+        logger.info("🔗 STARTING ELEMENT MERGING ON PAGE")
+        logger.info("🔗 Input elements: \(elements.count)")
         
-        for i in 0..<elements.count {
-            guard !processedIndices.contains(i) else { continue }
-            
+        var mergedElements: [DocumentElement] = []
+        var i = 0
+        
+        while i < elements.count {
             let currentElement = elements[i]
-            var bestMergeCandidate: (index: Int, element: DocumentElement)? = nil
-            var bestMergeScore: Float = 0
+            logger.info("🔍 Processing Element \(i): '\(currentElement.text ?? "nil")' (Type: \(currentElement.type))")
+            logger.info("   📍 Y-coordinate: \(currentElement.boundingBox.midY)")
             
-            // Look for the best merge candidate
-            for j in (i + 1)..<elements.count {
-                guard !processedIndices.contains(j) else { continue }
-                
-                let candidate = elements[j]
+            // Only check if we can merge with the NEXT element (adjacent in Y-coordinate order)
+            if i + 1 < elements.count {
+                let nextElement = elements[i + 1]
+                logger.info("   🔍 Checking merge with next element: '\(nextElement.text ?? "nil")' (Type: \(nextElement.type))")
+                logger.info("      📍 Y-coordinate: \(nextElement.boundingBox.midY)")
                 
                 // Check if elements can be merged
-                if currentElement.canMerge(with: candidate, config: config.processing) {
-                    let mergeScore = calculateMergeScore(currentElement, candidate)
+                if currentElement.canMerge(with: nextElement, config: config.processing) {
+                    // Perform the merge
+                    logger.info("🔗 PERFORMING MERGE:")
+                    logger.info("   📝 Element \(i): '\(currentElement.text ?? "nil")'")
+                    logger.info("   📝 Element \(i+1): '\(nextElement.text ?? "nil")'")
                     
-                    if mergeScore > bestMergeScore {
-                        bestMergeScore = mergeScore
-                        bestMergeCandidate = (j, candidate)
-                    }
+                                                    let mergedElement = await mergeElements(currentElement, nextElement, documentLanguage: documentLanguage)
+                    mergedElements.append(mergedElement)
+                    
+                    logger.info("   ✅ MERGED RESULT: '\(mergedElement.text ?? "nil")'")
+                    
+                    // Skip the next element since it was merged
+                    i += 2
+                } else {
+                    // Cannot merge, keep current element as-is
+                    logger.info("   ❌ CANNOT MERGE - keeping element as-is")
+                    mergedElements.append(currentElement)
+                    i += 1
                 }
-            }
-            
-            if let (mergeIndex, mergeElement) = bestMergeCandidate {
-                // Perform the merge
-                let mergedElement = await mergeElements(currentElement, mergeElement)
-                mergedElements.append(mergedElement)
-                
-                // Mark both elements as processed
-                processedIndices.insert(i)
-                processedIndices.insert(mergeIndex)
-                
-                logger.debug("Merged elements: '\(currentElement.text ?? "nil")' + '\(mergeElement.text ?? "nil")' → '\(mergedElement.text ?? "nil")'")
             } else {
-                // No merge candidate found, keep the element as-is
+                // Last element, keep as-is
+                logger.info("🔍 Last element, keeping as-is")
                 mergedElements.append(currentElement)
-                processedIndices.insert(i)
+                i += 1
             }
         }
+        
+        logger.info("🔗 MERGING COMPLETE:")
+        logger.info("   📊 Input: \(elements.count) elements")
+        logger.info("   📊 Output: \(mergedElements.count) elements")
+        logger.info("   🔗 Merged: \(elements.count - mergedElements.count) elements")
         
         return mergedElements
     }
@@ -1122,7 +1190,9 @@ public class UnifiedDocumentProcessor {
     }
     
     /// Merges two elements into a single element
-    private func mergeElements(_ first: DocumentElement, _ second: DocumentElement) async -> DocumentElement {
+    private func mergeElements(_ first: DocumentElement, _ second: DocumentElement, documentLanguage: String) async -> DocumentElement {
+        logger.info("🔍 MERGE ELEMENTS CALLED: '\(first.text ?? "nil")' + '\(second.text ?? "nil")' with language: \(documentLanguage)")
+        
         // Determine the merged bounding box
         let mergedBoundingBox = first.boundingBox.union(with: second.boundingBox)
         
@@ -1133,20 +1203,40 @@ public class UnifiedDocumentProcessor {
             let isSameLine = first.boundingBox.isVerticallyAligned(with: second.boundingBox, tolerance: 20.0)
             
             if isSameLine {
-                // Same line merging: preserve spacing based on actual distance
+                // RULE 1: Same line merging - language-aware spacing
                 let horizontalGap = first.boundingBox.horizontalGap(to: second.boundingBox)
-                let needsSpace = horizontalGap > 5.0 // If gap is more than 5 points, add space
                 
-                if needsSpace {
-                    mergedText = "\(firstText) \(secondText)"
+                // Apply language-specific spacing rules for same-line merges
+                if shouldAddSpaceForLanguage(documentLanguage, topText: firstText, bottomText: secondText) {
+                    // Calculate proportional spacing based on the gap for languages that need spaces
+                    let spacingCount = calculateProportionalSpacing(horizontalGap: horizontalGap)
+                    let spaces = String(repeating: " ", count: spacingCount)
+                    mergedText = "\(firstText)\(spaces)\(secondText)"
+                    logger.debug("Same-line merge (with spaces): '\(firstText)' + '\(secondText)' with \(spacingCount) spaces (gap: \(horizontalGap) points)")
                 } else {
-                    // Elements are very close, merge without extra space
+                    // No spaces for languages that don't need them (like Chinese)
                     mergedText = "\(firstText)\(secondText)"
+                    logger.debug("Same-line merge (no spaces): '\(firstText)' + '\(secondText)' (gap: \(horizontalGap) points)")
                 }
             } else {
-                // Vertical or diagonal merging: add space if not already separated
-                let needsSpace = !firstText.hasSuffix(" ") && !secondText.hasPrefix(" ")
-                mergedText = needsSpace ? "\(firstText) \(secondText)" : "\(firstText)\(secondText)"
+                // RULE 2: Cross-line merging - ensure proper order based on Y-coordinates
+                // Element with higher Y (closer to top) should come first
+                let (topElement, bottomElement) = first.boundingBox.minY > second.boundingBox.minY ? (first, second) : (second, first)
+                let topText = topElement.text ?? ""
+                let bottomText = bottomElement.text ?? ""
+                
+                // For cross-line merges, don't add automatic spaces
+                // Chinese text and incomplete sentences typically don't need spaces
+                // Use the document language passed from above instead of detecting it again
+                
+                // Apply language-specific spacing rules
+                if shouldAddSpaceForLanguage(documentLanguage, topText: topText, bottomText: bottomText) {
+                    mergedText = "\(topText) \(bottomText)"
+                } else {
+                    mergedText = "\(topText)\(bottomText)"
+                }
+                
+                logger.info("🔗 CROSS-LINE MERGE: Language=\(documentLanguage), Space=\(shouldAddSpaceForLanguage(documentLanguage, topText: topText, bottomText: bottomText)), Result='\(mergedText ?? "nil")'")
             }
         } else {
             mergedText = first.text ?? second.text
@@ -1193,6 +1283,28 @@ public class UnifiedDocumentProcessor {
         )
     }
     
+    /// Calculates proportional spacing based on horizontal gap between elements
+    private func calculateProportionalSpacing(horizontalGap: CGFloat) -> Int {
+        // Base spacing calculation:
+        // - Very close (0-10 points): 1 space
+        // - Close (10-30 points): 2 spaces  
+        // - Medium (30-60 points): 3 spaces
+        // - Far (60+ points): 4+ spaces
+        
+        if horizontalGap <= 10.0 {
+            return 1
+        } else if horizontalGap <= 30.0 {
+            return 2
+        } else if horizontalGap <= 60.0 {
+            return 3
+        } else if horizontalGap <= 100.0 {
+            return 4
+        } else {
+            // For very far elements, add more spaces proportionally
+            return min(8, Int(horizontalGap / 20.0))
+        }
+    }
+    
     // MARK: - LLM Optimization
     
     @available(macOS 26.0, *)
@@ -1210,6 +1322,197 @@ public class UnifiedDocumentProcessor {
         // 4. Return improved elements
         
         return elements
+    }
+    
+    // MARK: - Private Helper Methods
+    
+    /// Filter out page headers and footers based on their position
+    private func filterOutPageHeadersAndFooters(_ elements: [DocumentElement]) -> [DocumentElement] {
+        guard config.processing.enableHeaderFooterDetection else {
+            return elements
+        }
+        
+        let headerRegion = config.processing.pageHeaderRegion
+        let footerRegion = config.processing.pageFooterRegion
+        
+        logger.info("🗺️ Starting page header/footer filtering:")
+        logger.info("   📍 Header region: Y=[\(headerRegion[0]), \(headerRegion[1])]")
+        logger.info("   📍 Footer region: Y=[\(footerRegion[0]), \(footerRegion[1])]")
+        
+        var filteredElements: [DocumentElement] = []
+        var filteredCount = 0
+        
+        for element in elements {
+            let elementY = element.boundingBox.minY
+            let elementHeight = element.boundingBox.height
+            let elementBottom = elementY + elementHeight
+            
+            // Check if element is in header region (top of page)
+            let isInHeaderRegion = elementY >= headerRegion[0] && elementY <= headerRegion[1]
+            
+            // Check if element is in footer region (bottom of page)
+            let isInFooterRegion = elementBottom >= footerRegion[0] && elementBottom <= footerRegion[1]
+            
+            if isInHeaderRegion || isInFooterRegion {
+                filteredCount += 1
+                let regionType = isInHeaderRegion ? "header" : "footer"
+                logger.debug("🗺️ Filtered out \(regionType) element: '\(element.text ?? "no text")' at Y=\(elementY)")
+            } else {
+                filteredElements.append(element)
+            }
+        }
+        
+        logger.info("🗺️ Page header/footer filtering complete: \(elements.count) → \(filteredElements.count) elements (\(filteredCount) filtered out)")
+        return filteredElements
+    }
+    
+    // MARK: - Language-Aware Text Merging
+    
+    /// Detects the primary language of the document from all extracted text
+    /// - Parameter elements: Array of document elements
+    /// - Returns: Primary language code (e.g., "zh", "en", "ja")
+    private func detectDocumentLanguage(from elements: [DocumentElement]) -> String {
+        logger.info("🌐 Starting document language detection")
+        
+        // Combine all text for language detection
+        let allText = elements.compactMap { $0.text }.joined(separator: " ")
+        
+        guard !allText.isEmpty else {
+            logger.info("🌐 No text found, defaulting to English")
+            return "en"
+        }
+        
+        // Use the LanguageDetector to detect the primary language
+        let detectedLanguage = languageDetector.detectLanguage(from: allText)
+        logger.info("🌐 Document language detected: \(detectedLanguage)")
+        
+        return detectedLanguage
+    }
+    
+    /// Post-processes extracted text to remove unnecessary spaces based on language detection
+    /// - Parameter elements: Array of extracted document elements
+    /// - Returns: Array of elements with cleaned text
+    private func cleanExtractedText(_ elements: [DocumentElement]) -> [DocumentElement] {
+        logger.info("🧹 Starting text cleanup for \(elements.count) elements")
+        
+        var cleanedElements: [DocumentElement] = []
+        var cleanedCount = 0
+        
+        for element in elements {
+            guard let originalText = element.text else {
+                cleanedElements.append(element)
+                continue
+            }
+            
+            // Use the injected language detector
+            let language = languageDetector.detectLanguage(from: originalText)
+            
+            // Clean the text based on language
+            let cleanedText = cleanTextForLanguage(originalText, language: language)
+            
+            if cleanedText != originalText {
+                cleanedCount += 1
+                logger.info("🧹 Cleaned text for language \(language):")
+                logger.info("   📝 Before: '\(originalText)'")
+                logger.info("   📝 After:  '\(cleanedText)'")
+                
+                // Create new element with cleaned text
+                let cleanedElement = DocumentElement(
+                    type: element.type,
+                    boundingBox: element.boundingBox,
+                    contentData: element.contentData,
+                    confidence: element.confidence,
+                    pageNumber: element.pageNumber,
+                    text: cleanedText,
+                    metadata: element.metadata.merging([
+                        "original_text": originalText,
+                        "cleaned_text": cleanedText,
+                        "detected_language": language
+                    ]) { _, new in new }
+                )
+                cleanedElements.append(cleanedElement)
+            } else {
+                cleanedElements.append(element)
+            }
+        }
+        
+        logger.info("🧹 Text cleanup completed: \(cleanedCount) elements cleaned")
+        return cleanedElements
+    }
+    
+    /// Cleans text content based on detected language
+    /// - Parameters:
+    ///   - text: The text to clean
+    ///   - language: The detected language code
+    /// - Returns: Cleaned text
+    private func cleanTextForLanguage(_ text: String, language: String) -> String {
+        // For CJK languages, remove unnecessary spaces between characters
+        // Handle language variants like "zh-Hans", "zh-Hant", "ja-Hira", etc.
+        let isCJKLanguage = language.hasPrefix("zh") || language.hasPrefix("ja") || language.hasPrefix("ko")
+        if isCJKLanguage {
+            // Remove spaces between Chinese characters, but keep spaces around punctuation
+            var cleanedText = text
+            
+            // Pattern to match Chinese characters with spaces between them
+            let chineseCharPattern = #"([\u4e00-\u9fff])\s+([\u4e00-\u9fff])"#
+            
+            // Replace multiple spaces between Chinese characters with no space
+            cleanedText = cleanedText.replacingOccurrences(
+                of: chineseCharPattern,
+                with: "$1$2",
+                options: .regularExpression
+            )
+            
+            // Remove leading/trailing spaces
+            cleanedText = cleanedText.trimmingCharacters(in: .whitespaces)
+            
+            return cleanedText
+        }
+        
+        // For other languages, return as-is
+        return text
+    }
+    
+    /// Determines whether to add a space between two text elements based on language
+    /// - Parameters:
+    ///   - language: The detected language code
+    ///   - topText: The text from the top element
+    ///   - bottomText: The text from the top element
+    /// - Returns: True if a space should be added, false otherwise
+    private func shouldAddSpaceForLanguage(_ language: String, topText: String, bottomText: String) -> Bool {
+        // CJK languages (Chinese, Japanese, Korean) typically don't need spaces
+        // Handle language variants like "zh-Hans", "zh-Hant", "ja-Hira", etc.
+        let isCJKLanguage = language.hasPrefix("zh") || language.hasPrefix("ja") || language.hasPrefix("ko")
+        
+        // Add debug logging to see what's happening
+        logger.info("🔍 LANGUAGE CHECK: language='\(language)', isCJKLanguage=\(isCJKLanguage), topText='\(topText)', bottomText='\(bottomText)'")
+        
+        if isCJKLanguage {
+            logger.info("✅ CJK language detected - NO SPACE added")
+            return false
+        }
+        
+        // For English and other European languages, add spaces when needed
+        if language == "en" || language == "es" || language == "fr" || language == "de" || language == "it" {
+            // Don't add space if top text ends with space or bottom text starts with space
+            if topText.hasSuffix(" ") || bottomText.hasPrefix(" ") {
+                return false
+            }
+            
+            // Don't add space if top text ends with punctuation that doesn't need following space
+            let noSpaceAfterPunctuation = [".", "!", "?", ":", ";", ","]
+            if noSpaceAfterPunctuation.contains(where: { topText.hasSuffix($0) }) {
+                return false
+            }
+            
+            // Add space for better readability in European languages
+            logger.info("✅ European language detected - SPACE added")
+            return true
+        }
+        
+        // Default: add space for better readability
+        logger.info("✅ Default case - SPACE added")
+        return true
     }
 }
 

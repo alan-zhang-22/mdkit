@@ -1,13 +1,13 @@
 {
   "processing": {
-    "overlapThreshold": 0.1,
+    "overlapThreshold": 0.15,
     "enableHeaderFooterDetection": true,
     "pageHeaderRegion": [0.90, 1.0],
     "pageFooterRegion": [0.0, 0.1],
     "enableElementMerging": true,
-    "mergeDistanceThreshold": 0.02,
+    "mergeDistanceThreshold": 0.01,
     "isMergeDistanceNormalized": true,
-    "horizontalMergeThreshold": 0.15,
+    "horizontalMergeThreshold": 0.05,
     "isHorizontalMergeThresholdNormalized": true,
     "enableLLMOptimization": true,
     "pdfImageScaleFactor": 2.0,
