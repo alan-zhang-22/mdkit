@@ -413,6 +413,14 @@ public class ConfigurationManager: ConfigurationManaging {
                 tableFormat: "standard",
                 codeBlockFormat: "fenced"
             ),
+            imageExtraction: ImageExtractionConfig(
+                enabled: true,
+                savePDFPagesAsImages: true,
+                imageFormat: "png",
+                imageQuality: 300,
+                saveToOutputFolder: true,
+                namingPattern: "page_{pageNumber}.png"
+            ),
             ocr: OCRConfig(
                 recognitionLevel: "accurate",
                 languages: ["zh-CN", "en-US"],
@@ -655,8 +663,9 @@ public class ConfigurationManager: ConfigurationManaging {
             errors.append("OCR minimum text height must be between 0.0 and 1.0")
         }
         
-        if config.ocr.languages.isEmpty {
-            errors.append("OCR languages cannot be empty")
+        // Allow empty languages when auto-detection is enabled
+        if config.ocr.languages.isEmpty && !config.ocr.autoDetectLanguages {
+            errors.append("OCR languages cannot be empty unless auto-detection is enabled")
         }
         
         // Validate performance configuration

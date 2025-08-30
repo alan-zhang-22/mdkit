@@ -2,13 +2,12 @@ import Foundation
 import ArgumentParser
 import mdkitCore
 import mdkitConfiguration
-import mdkitLogging
 
 @main
-struct MDKitAsyncCLI: AsyncParsableCommand {
+struct MDKitCLI: AsyncParsableCommand {
     // Define the command-line structure with subcommands
     static let configuration = CommandConfiguration(
-        abstract: "A CLI tool to test async PDF processing.",
+        abstract: "A CLI tool for PDF to Markdown conversion with OCR processing.",
         subcommands: [Convert.self, Test.self, Validate.self]
     )
     
@@ -42,45 +41,42 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
         // Initialize logging system with default settings
         Self.initializeLogging(verbose: false)
         
-        print("mdkit-async - PDF to Markdown conversion tool (Async Version)")
-        print("============================================================")
+        print("mdkit - PDF to Markdown conversion tool with OCR")
+        print("=================================================")
         print("")
         print("📚 USAGE EXAMPLES:")
         print("")
-        print("  # Basic async conversion")
-        print("  mdkit-async convert document.pdf --async")
+        print("  # Basic conversion")
+        print("  mdkit convert document.pdf")
         print("")
-        print("  # Convert with custom output and timeout")
-        print("  mdkit-async convert document.pdf --output ./output/result.md --async --timeout 600")
+        print("  # Convert with custom output and configuration")
+        print("  mdkit convert document.pdf --output ./output/result.md --config ./my-config.json")
         print("")
         print("  # Convert specific pages with LLM optimization")
-        print("  mdkit-async convert document.pdf --pages 5-7 --enable-llm --async")
+        print("  mdkit convert document.pdf --pages 5-7 --enable-llm --config ./prod-config.json")
         print("")
         print("  # Dry run to see what would happen")
-        print("  mdkit-async convert document.pdf --dry-run")
+        print("  mdkit convert document.pdf --dry-run")
         print("")
         print("  # Validate configuration")
-        print("  mdkit-async validate --all")
+        print("  mdkit validate --all")
         print("")
         print("  # Show help for specific command")
-        print("  mdkit-async convert --help")
+        print("  mdkit convert --help")
         print("")
-        print("💡 For more information, use 'mdkit-async --help' or 'mdkit-async <command> --help'")
+        print("💡 For more information, use 'mdkit --help' or 'mdkit <command> --help'")
     }
 
     // MARK: - Nested Commands
     
-    /// Converts a PDF file to Markdown with async processing
+    /// Converts a PDF file to Markdown with OCR processing
     struct Convert: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Converts a PDF file to Markdown with async processing."
+            abstract: "Converts a PDF file to Markdown with OCR processing."
         )
 
         @Argument(help: "The PDF file to convert.")
         var inputFile: String
-
-        @Flag(name: .long, help: "Enable async processing")
-        var async: Bool = false
 
         @Flag(name: .long, help: "Show what would be processed without actually converting")
         var dryRun: Bool = false
@@ -96,15 +92,18 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
         
         @Flag(name: .shortAndLong, help: "Enable verbose logging for debugging")
         var verbose: Bool = false
+        
+        @Option(name: .long, help: "Path to configuration file (default: dev-config.json)")
+        var config: String?
 
         func run() async throws {
             // Initialize logging system with the verbose flag from this command
-            MDKitAsyncCLI.initializeLogging(verbose: verbose)
+            MDKitCLI.initializeLogging(verbose: verbose)
             
             print("🔄 Starting PDF conversion...")
             print("   Input file: \(inputFile)")
             print("   Page range: \(pages)")
-            print("   Async mode: \(async ? "✅ Enabled" : "❌ Disabled")")
+            print("   Configuration: \(config ?? "dev-config.json (default)")")
             print("   Dry run: \(dryRun ? "✅ Yes" : "❌ No")")
             print("   Output directory: \(output)")
             print("   LLM optimization: \(enableLLM ? "✅ Enabled" : "❌ Disabled")")
@@ -113,103 +112,74 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
             if dryRun {
                 print("")
                 print("🔍 DRY RUN MODE - No files will be processed")
-                print("   This is a test of the async CLI structure")
+                print("   This is a test of the CLI structure")
                 print("   The actual PDF processing will be implemented next")
                 return
             }
             
-            if async {
-                print("")
-                print("⚡ ASYNC MODE - Processing with MainProcessor")
+            print("")
+            print("⚡ Processing with MainProcessor")
+            
+            do {
+                // Load configuration from specified file or use default
+                let configManager = ConfigurationManager()
+                let configuration: MDKitConfig
                 
-                do {
-                    // Use MainProcessor directly for real PDF processing
-                    // MainProcessor will load its own configuration via ConfigurationManager
-                    let mainProcessor = try MainProcessor()
-                    
-                    // Create processing options
-                    let options = ProcessingOptions(
-                        verbose: true,
-                        dryRun: false,
-                        maxConcurrency: 1,
-                        outputFormat: .markdown
-                    )
-                    
-                    print("   🚀 Initializing MainProcessor...")
-                    print("   ✅ Configuration loaded successfully")
-                    print("   🔍 Starting PDF processing...")
-                    
-                    // Process the PDF using the existing infrastructure
-                    let result = try await mainProcessor.processPDF(
-                        inputPath: inputFile,
-                        outputPath: output,
-                        options: options,
-                        pageRange: pages == "all" ? nil : pages
-                    )
-                    
-                    if result.success {
-                        print("")
-                        print("✅ PDF processing completed successfully!")
-                        print("   📁 Output file: \(result.outputPath ?? "unknown")")
-                        print("   📊 Processing time: \(String(format: "%.2f", result.processingTime)) seconds")
-                        print("   🔍 Elements extracted: \(result.elementCount)")
-                        
-                        // Get statistics
-                        let stats = mainProcessor.getStatistics()
-                        print("   📈 Processing statistics:")
-                        print("      - Success rate: \(String(format: "%.1f", stats.successRate))%")
-                        print("      - Average time: \(String(format: "%.2f", stats.averageProcessingTime))s")
-                        
-                    } else {
-                        print("❌ PDF processing failed")
-                        if let error = result.error {
-                            print("   Error: \(error.localizedDescription)")
-                        }
-                        throw result.error ?? PDFProcessingError.processingFailed(underlying: PDFProcessingError.outputWriteFailed(path: "unknown"))
-                    }
-                    
-                } catch {
-                    print("❌ PDF processing failed: \(error.localizedDescription)")
-                    throw error
+                if let configPath = config {
+                    print("   📋 Loading configuration from: \(configPath)")
+                    configuration = try configManager.loadConfiguration(from: configPath)
+                } else {
+                    print("   📋 Loading default configuration: dev-config.json")
+                    configuration = try configManager.loadConfigurationFromResources(fileName: "dev-config.json")
                 }
-            } else {
-                print("")
-                print("🐌 SYNC MODE - Processing without verbose output")
                 
-                do {
-                    // Use MainProcessor with minimal output
-                    // MainProcessor will load its own configuration via ConfigurationManager
-                    let mainProcessor = try MainProcessor()
+                // Initialize MainProcessor with the loaded configuration
+                let mainProcessor = try MainProcessor(config: configuration)
+                
+                // Create processing options
+                let options = ProcessingOptions(
+                    verbose: verbose,
+                    dryRun: false,
+                    maxConcurrency: 1,
+                    outputFormat: .markdown
+                )
+                
+                print("   🚀 Initializing MainProcessor...")
+                print("   ✅ Configuration loaded successfully")
+                print("   🔍 Starting PDF processing...")
+                
+                // Process the PDF using the existing infrastructure
+                let result = try await mainProcessor.processPDF(
+                    inputPath: inputFile,
+                    outputPath: output,
+                    options: options,
+                    pageRange: pages == "all" ? nil : pages
+                )
+                
+                if result.success {
+                    print("")
+                    print("✅ PDF processing completed successfully!")
+                    print("   📁 Output file: \(result.outputPath ?? "unknown")")
+                    print("   📊 Processing time: \(String(format: "%.2f", result.processingTime)) seconds")
+                    print("   🔍 Elements extracted: \(result.elementCount)")
                     
-                    let options = ProcessingOptions(
-                        verbose: false,
-                        dryRun: false,
-                        maxConcurrency: 1,
-                        outputFormat: .markdown
-                    )
+                    // Get statistics
+                    let stats = mainProcessor.getStatistics()
+                    print("   📈 Processing statistics:")
+                    print("      - Success rate: \(String(format: "%.1f", stats.successRate))%")
+                    print("      - Average time: \(String(format: "%.2f", stats.averageProcessingTime))s")
                     
-                    let result = try await mainProcessor.processPDF(
-                        inputPath: inputFile,
-                        outputPath: output,
-                        options: options,
-                        pageRange: pages == "all" ? nil : pages
-                    )
-                    
-                    if result.success {
-                        print("")
-                        print("✅ PDF processing completed successfully!")
-                        print("   📁 Output file: \(result.outputPath ?? "unknown")")
-                        print("   📊 Processing time: \(String(format: "%.2f", result.processingTime)) seconds")
-                        print("   🔍 Elements extracted: \(result.elementCount)")
-                    } else {
-                        print("❌ PDF processing failed")
-                        throw result.error ?? PDFProcessingError.processingFailed(underlying: PDFProcessingError.outputWriteFailed(path: "unknown"))
+                } else {
+                    print("❌ PDF processing failed")
+                    if let error = result.error {
+                        print("   Error: \(error.localizedDescription)")
                     }
-                    
-                } catch {
-                    print("❌ PDF processing failed: \(error.localizedDescription)")
-                    throw error
+                    throw result.error ?? PDFProcessingError.processingFailed(underlying: PDFProcessingError.outputWriteFailed(path: "unknown"))
                 }
+                
+            } catch {
+                print("❌ PDF processing failed: \(error.localizedDescription)")
+                throw error
             }
             
             print("")
@@ -217,17 +187,17 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
         }
     }
     
-    /// Tests async functionality with a simple operation
+    /// Tests functionality with a simple operation
     struct Test: AsyncParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Tests async functionality with a simple operation."
+            abstract: "Tests functionality with a simple operation."
         )
 
         @Option(name: .shortAndLong, help: "Number of seconds to wait")
         var delay: Int = 3
 
         func run() async throws {
-            print("🧪 Testing async functionality...")
+            print("🧪 Testing functionality...")
             print("   Will wait for \(delay) seconds")
             
             for i in 1...delay {
@@ -235,7 +205,7 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
                 try await Task.sleep(for: .seconds(1))
             }
             
-            print("✅ Async test completed successfully!")
+            print("✅ Test completed successfully!")
         }
     }
     
@@ -284,7 +254,7 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
                     print("   ✅ File management")
                     print("   ✅ Progress reporting")
                     print("   ✅ Error handling")
-                    print("   ✅ Async processing")
+                    print("   ✅ OCR processing")
                 }
                 
             } catch {
@@ -321,7 +291,4 @@ struct MDKitAsyncCLI: AsyncParsableCommand {
             }
         }
     }
-    
-
 }
-

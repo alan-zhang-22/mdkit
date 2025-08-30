@@ -9,6 +9,7 @@ import XCTest
 import CoreGraphics
 @testable import mdkitCore
 @testable import mdkitConfiguration
+@testable import mdkitProtocols
 
 final class DocumentElementTests: XCTestCase {
     
@@ -21,74 +22,74 @@ final class DocumentElementTests: XCTestCase {
     
     func testElementTypeCases() {
         // Test that all cases are accessible
-        XCTAssertEqual(ElementType.allCases.count, 13)
-        XCTAssertTrue(ElementType.allCases.contains(.title))
-        XCTAssertTrue(ElementType.allCases.contains(.textBlock))
-        XCTAssertTrue(ElementType.allCases.contains(.paragraph))
-        XCTAssertTrue(ElementType.allCases.contains(.header))
-        XCTAssertTrue(ElementType.allCases.contains(.footer))
-        XCTAssertTrue(ElementType.allCases.contains(.table))
-        XCTAssertTrue(ElementType.allCases.contains(.list))
-        XCTAssertTrue(ElementType.allCases.contains(.listItem))
-        XCTAssertTrue(ElementType.allCases.contains(.barcode))
-        XCTAssertTrue(ElementType.allCases.contains(.image))
-        XCTAssertTrue(ElementType.allCases.contains(.footnote))
-        XCTAssertTrue(ElementType.allCases.contains(.pageNumber))
-        XCTAssertTrue(ElementType.allCases.contains(.unknown))
+        XCTAssertEqual(DocumentElementType.allCases.count, 13)
+        XCTAssertTrue(DocumentElementType.allCases.contains(.title))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.textBlock))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.paragraph))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.header))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.footer))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.table))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.list))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.listItem))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.barcode))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.image))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.footnote))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.pageNumber))
+        XCTAssertTrue(DocumentElementType.allCases.contains(.unknown))
     }
     
     func testElementTypeDescriptions() {
-        XCTAssertEqual(ElementType.title.description, "Title")
-        XCTAssertEqual(ElementType.textBlock.description, "Text Block")
-        XCTAssertEqual(ElementType.paragraph.description, "Paragraph")
-        XCTAssertEqual(ElementType.header.description, "Header")
-        XCTAssertEqual(ElementType.footer.description, "Footer")
-        XCTAssertEqual(ElementType.table.description, "Table")
-        XCTAssertEqual(ElementType.list.description, "List")
-        XCTAssertEqual(ElementType.listItem.description, "List Item")
-        XCTAssertEqual(ElementType.barcode.description, "Barcode")
-        XCTAssertEqual(ElementType.image.description, "Image")
-        XCTAssertEqual(ElementType.footnote.description, "Footnote")
-        XCTAssertEqual(ElementType.pageNumber.description, "Page Number")
-        XCTAssertEqual(ElementType.unknown.description, "Unknown")
+        XCTAssertEqual(DocumentElementType.title.description, "Title")
+        XCTAssertEqual(DocumentElementType.textBlock.description, "Text Block")
+        XCTAssertEqual(DocumentElementType.paragraph.description, "Paragraph")
+        XCTAssertEqual(DocumentElementType.header.description, "Header")
+        XCTAssertEqual(DocumentElementType.footer.description, "Footer")
+        XCTAssertEqual(DocumentElementType.table.description, "Table")
+        XCTAssertEqual(DocumentElementType.list.description, "List")
+        XCTAssertEqual(DocumentElementType.listItem.description, "List Item")
+        XCTAssertEqual(DocumentElementType.barcode.description, "Barcode")
+        XCTAssertEqual(DocumentElementType.image.description, "Image")
+        XCTAssertEqual(DocumentElementType.footnote.description, "Footnote")
+        XCTAssertEqual(DocumentElementType.pageNumber.description, "Page Number")
+        XCTAssertEqual(DocumentElementType.unknown.description, "Unknown")
     }
     
     func testElementTypeTextBased() {
         // Text-based elements
-        XCTAssertTrue(ElementType.title.isTextBased)
-        XCTAssertTrue(ElementType.textBlock.isTextBased)
-        XCTAssertTrue(ElementType.paragraph.isTextBased)
-        XCTAssertTrue(ElementType.header.isTextBased)
-        XCTAssertTrue(ElementType.footer.isTextBased)
-        XCTAssertTrue(ElementType.listItem.isTextBased)
-        XCTAssertTrue(ElementType.footnote.isTextBased)
-        XCTAssertTrue(ElementType.pageNumber.isTextBased)
+        XCTAssertTrue(DocumentElementType.title.isTextBased)
+        XCTAssertTrue(DocumentElementType.textBlock.isTextBased)
+        XCTAssertTrue(DocumentElementType.paragraph.isTextBased)
+        XCTAssertTrue(DocumentElementType.header.isTextBased)
+        XCTAssertTrue(DocumentElementType.footer.isTextBased)
+        XCTAssertTrue(DocumentElementType.listItem.isTextBased)
+        XCTAssertTrue(DocumentElementType.footnote.isTextBased)
+        XCTAssertTrue(DocumentElementType.pageNumber.isTextBased)
         
         // Non-text-based elements
-        XCTAssertFalse(ElementType.table.isTextBased)
-        XCTAssertFalse(ElementType.list.isTextBased)
-        XCTAssertFalse(ElementType.barcode.isTextBased)
-        XCTAssertFalse(ElementType.image.isTextBased)
-        XCTAssertFalse(ElementType.unknown.isTextBased)
+        XCTAssertFalse(DocumentElementType.table.isTextBased)
+        XCTAssertFalse(DocumentElementType.list.isTextBased)
+        XCTAssertFalse(DocumentElementType.barcode.isTextBased)
+        XCTAssertFalse(DocumentElementType.image.isTextBased)
+        XCTAssertFalse(DocumentElementType.unknown.isTextBased)
     }
     
     func testElementTypeMergeable() {
         // Mergeable elements
-        XCTAssertTrue(ElementType.textBlock.isMergeable)
-        XCTAssertTrue(ElementType.paragraph.isMergeable)
-        XCTAssertTrue(ElementType.listItem.isMergeable)
+        XCTAssertTrue(DocumentElementType.textBlock.isMergeable)
+        XCTAssertTrue(DocumentElementType.paragraph.isMergeable)
+        XCTAssertTrue(DocumentElementType.listItem.isMergeable)
         
         // Non-mergeable elements
-        XCTAssertFalse(ElementType.title.isMergeable)
-        XCTAssertFalse(ElementType.header.isMergeable)
-        XCTAssertFalse(ElementType.footer.isMergeable)
-        XCTAssertFalse(ElementType.table.isMergeable)
-        XCTAssertFalse(ElementType.list.isMergeable)
-        XCTAssertFalse(ElementType.barcode.isMergeable)
-        XCTAssertFalse(ElementType.image.isMergeable)
-        XCTAssertFalse(ElementType.footnote.isMergeable)
-        XCTAssertFalse(ElementType.pageNumber.isMergeable)
-        XCTAssertFalse(ElementType.unknown.isMergeable)
+        XCTAssertFalse(DocumentElementType.title.isMergeable)
+        XCTAssertFalse(DocumentElementType.header.isMergeable)
+        XCTAssertFalse(DocumentElementType.footer.isMergeable)
+        XCTAssertFalse(DocumentElementType.table.isMergeable)
+        XCTAssertFalse(DocumentElementType.list.isMergeable)
+        XCTAssertFalse(DocumentElementType.barcode.isMergeable)
+        XCTAssertFalse(DocumentElementType.image.isMergeable)
+        XCTAssertFalse(DocumentElementType.footnote.isMergeable)
+        XCTAssertFalse(DocumentElementType.pageNumber.isMergeable)
+        XCTAssertFalse(DocumentElementType.unknown.isMergeable)
     }
     
     // MARK: - DocumentElement Initialization Tests

@@ -7,9 +7,6 @@
 
 import Foundation
 import CoreGraphics
-import Logging
-import mdkitConfiguration
-import mdkitLogging
 
 /// Represents a single element extracted from a document using Apple's Vision framework
 public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
@@ -17,7 +14,7 @@ public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     
     /// Type of document element
-    public let type: ElementType
+    public let type: DocumentElementType
     
     /// Bounding box in document coordinates
     public let boundingBox: CGRect
@@ -42,7 +39,7 @@ public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
     
     public init(
         id: UUID = UUID(),
-        type: ElementType,
+        type: DocumentElementType,
         boundingBox: CGRect,
         contentData: Data,
         confidence: Float,
@@ -66,7 +63,7 @@ public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
 // MARK: - ElementType Enum
 
 /// Types of document elements that can be detected
-public enum ElementType: String, CaseIterable, Codable, Sendable {
+public enum DocumentElementType: String, CaseIterable, Codable, Sendable {
     /// Document title or main heading
     case title = "title"
     
@@ -151,7 +148,7 @@ public enum ElementType: String, CaseIterable, Codable, Sendable {
 extension DocumentElement {
     /// Creates a new element with updated properties
     public func updating(
-        type: ElementType? = nil,
+        type: DocumentElementType? = nil,
         boundingBox: CGRect? = nil,
         contentData: Data? = nil,
         confidence: Float? = nil,
@@ -183,43 +180,30 @@ extension DocumentElement {
     }
     
     /// Whether this element can be merged with another
-    public func canMerge(with other: DocumentElement, config: mdkitConfiguration.ProcessingConfig? = nil) -> Bool {
+    /// Note: This method now takes a generic configuration type to avoid tight coupling
+    public func canMerge(with other: DocumentElement, config: Any? = nil) -> Bool {
         // Both elements must be mergeable types
         guard type.isMergeable && other.type.isMergeable else { 
-            Logger(label: "DocumentElement").info("🔍 CANMERGE: ❌ Type mismatch - \(type) vs \(other.type)")
             return false 
         }
         
         // Elements must be on the same page
         guard pageNumber == other.pageNumber else { 
-            Logger(label: "DocumentElement").info("🔍 CANMERGE: ❌ Different pages - \(pageNumber) vs \(other.pageNumber)")
             return false 
         }
-        
-        let logger = Logger(label: "DocumentElement")
-        logger.info("🔍 CANMERGE: Checking merge between:")
-        logger.info("   📝 Element 1: '\(text ?? "nil")' (Type: \(type))")
-        logger.info("   📝 Element 2: '\(other.text ?? "nil")' (Type: \(other.type))")
         
         // RULE 1: Same line merging - ALWAYS merge regardless of distance
         // Use a tighter tolerance to prevent incorrect same-line detection
         let isSameLine = boundingBox.isVerticallyAligned(with: other.boundingBox, tolerance: 0.005) // Same line (0.5% tolerance)
         
         if isSameLine {
-            logger.info("🔍 CANMERGE: ✅ RULE 1 - Same line elements, ALWAYS merge")
             return true
         }
-        
-        logger.info("🔍 CANMERGE: ❌ Not same line, checking RULE 2...")
         
         // RULE 2: Cross-line merging - only for incomplete paragraphs + non-headers
         // Check if current element is a paragraph that doesn't end with full stop
         let isIncompleteParagraph = isIncompleteParagraph()
         let nextElementIsNotHeader = !other.isHeaderElement()
-        
-        logger.info("🔍 CANMERGE: RULE 2 checks:")
-        logger.info("   📝 Is incomplete paragraph: \(isIncompleteParagraph)")
-        logger.info("   📝 Next element is not header: \(nextElementIsNotHeader)")
         
         if isIncompleteParagraph && nextElementIsNotHeader {
             // Calculate vertical distance for cross-line merging
@@ -227,18 +211,10 @@ extension DocumentElement {
             let documentHeight = 792.0 // Standard PDF page height
             let normalizedVerticalDistance = Float(verticalDistance / documentHeight)
             
-            logger.info("🔍 CANMERGE: RULE 2 - Cross-line merging:")
-            logger.info("   📏 Vertical distance: \(verticalDistance)px")
-            logger.info("   📏 Normalized distance: \(normalizedVerticalDistance)")
-            logger.info("   📏 Threshold: 0.05")
-            
             // Allow cross-line merging if elements are reasonably close
-            let canMergeCrossLine = normalizedVerticalDistance <= 0.05
-            logger.info("🔍 CANMERGE: RULE 2 result: \(canMergeCrossLine ? "✅ ALLOW" : "❌ DENY")")
-            return canMergeCrossLine
+            return normalizedVerticalDistance <= 0.05
         }
         
-        logger.info("🔍 CANMERGE: ❌ No rules satisfied, cannot merge")
         // No other merging scenarios allowed
         return false
     }
@@ -260,7 +236,7 @@ extension DocumentElement {
     /// Checks if this element is a header element
     private func isHeaderElement() -> Bool {
         // Check if element type is header
-        if type == .title || type == .header { // Changed from .heading to .header
+        if type == .title || type == .header {
             return true
         }
         

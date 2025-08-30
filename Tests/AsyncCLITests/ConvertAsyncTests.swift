@@ -2,7 +2,6 @@ import XCTest
 import Logging
 import mdkitConfiguration
 import mdkitFileManagement
-import mdkitLogging
 
 @testable import mdkitAsync
 

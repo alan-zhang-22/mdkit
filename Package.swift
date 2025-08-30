@@ -14,11 +14,7 @@ let package = Package(
             name: "mdkit",
             targets: ["mdkitExecutable"]
         ),
-        // Async executable target for enhanced command-line usage
-        .executable(
-            name: "mdkit-async",
-            targets: ["mdkitAsyncExecutable"]
-        ),
+
         // Library targets for use in other projects
         .library(
             name: "MDKitCore",
@@ -33,10 +29,6 @@ let package = Package(
             targets: ["mdkitFileManagement"]
         ),
         .library(
-            name: "MDKitLogging",
-            targets: ["mdkitLogging"]
-        ),
-        .library(
             name: "MDKitLLM",
             targets: ["mdkitLLM"]
         ),
@@ -48,12 +40,10 @@ let package = Package(
     dependencies: [
         // LocalLLMClient is only used by the mdkitLLM module
         .package(path: "third-party/LocalLLMClient"),
-        // Apple's official logging package
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
-        // File logging backend for swift-log
-        .package(url: "https://github.com/crspybits/swift-log-file", from: "0.1.0"),
         // Command-line argument parsing
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.4.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.4.0"),
+        // Logging
+        .package(url: "https://github.com/apple/swift-log", from: "1.0.0")
     ],
     targets: [
         // MARK: - Executable Target (CLI application)
@@ -63,56 +53,33 @@ let package = Package(
                 "mdkitCore",
                 "mdkitConfiguration",
                 "mdkitFileManagement",
-                "mdkitLogging",
                 "mdkitLLM",
-                .product(name: "ArgumentParser", package: "swift-argument-parser")
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "Logging", package: "swift-log")
             ],
-            path: "mdkit",
+            path: "Sources/CLI",
             swiftSettings: [
                 .interoperabilityMode(.Cxx),
                 .define("SWIFT_PACKAGE")
             ]
         ),
         
-        // MARK: - Async Executable Target (Enhanced CLI with async processing)
-        .executableTarget(
-            name: "mdkitAsyncExecutable",
-            dependencies: [
-                "mdkitCore",
-                "mdkitLogging",
-                .product(name: "ArgumentParser", package: "swift-argument-parser")
-            ],
-            path: "mdkit-async",
-            swiftSettings: [
-                .interoperabilityMode(.Cxx)
-            ]
-        ),
+
         
-        // MARK: - Logging Configuration (depends on swift-log and swift-log-file)
-        .target(
-            name: "mdkitLogging",
-            dependencies: [
-                .product(name: "Logging", package: "swift-log"),
-                .product(name: "FileLogging", package: "swift-log-file")
-            ],
-            path: "Sources/Logging"
-        ),
+
         
-        // MARK: - Configuration (depends on Logging)
+        // MARK: - Configuration (no external dependencies)
         .target(
             name: "mdkitConfiguration",
-            dependencies: [
-                "mdkitLogging"
-            ],
+            dependencies: [],
             path: "Sources/Configuration"
         ),
         
-        // MARK: - Core (depends on Configuration, Logging, Protocols, and FileManagement)
+        // MARK: - Core (depends on Configuration, Protocols, and FileManagement)
         .target(
             name: "mdkitCore",
             dependencies: [
                 "mdkitConfiguration",
-                "mdkitLogging",
                 "mdkitProtocols",
                 "mdkitFileManagement"
             ],
@@ -122,22 +89,20 @@ let package = Package(
             ]
         ),
         
-        // MARK: - File Management (depends on Configuration and Logging)
+        // MARK: - File Management (depends on Configuration)
         .target(
             name: "mdkitFileManagement",
             dependencies: [
-                "mdkitConfiguration",
-                "mdkitLogging"
+                "mdkitConfiguration"
             ],
             path: "Sources/FileManagement"
         ),
         
-        // MARK: - LLM (depends on Configuration, Logging, Protocols, and LocalLLMClient)
+        // MARK: - LLM (depends on Configuration, Protocols, and LocalLLMClient)
         .target(
             name: "mdkitLLM",
             dependencies: [
                 "mdkitConfiguration",
-                "mdkitLogging",
                 "mdkitProtocols",
                 .product(name: "LocalLLMClient", package: "LocalLLMClient"),
                 .product(name: "LocalLLMClientLlama", package: "LocalLLMClient")
@@ -152,13 +117,17 @@ let package = Package(
         // MARK: - Protocols (no dependencies)
         .target(
             name: "mdkitProtocols",
+            dependencies: [],
             path: "Sources/Protocols"
         ),
         
         // MARK: - Tests
         .testTarget(
             name: "mdkitCoreTests",
-            dependencies: ["mdkitCore"],
+            dependencies: [
+                "mdkitCore",
+                .product(name: "Logging", package: "swift-log")
+            ],
             path: "Tests/CoreTests",
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
@@ -191,7 +160,6 @@ let package = Package(
                 "mdkitCore",
                 "mdkitConfiguration",
                 "mdkitFileManagement",
-                "mdkitLogging",
                 "mdkitLLM"
             ],
             path: "Tests/IntegrationTests",

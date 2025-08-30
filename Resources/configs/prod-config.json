@@ -336,7 +336,7 @@
   },
   "ocr": {
     "recognitionLevel": "accurate",
-    "languages": ["zh-CN", "en-US"],
+    "languages": ["zh-Hans", "zh-Hant", "en-US"],
     "useLanguageCorrection": true,
     "minimumTextHeight": 0.01,
     "customWords": ["技术规范", "质量标准", "合规要求", "工程文档", "技术标准", "法规要求"],
@@ -344,7 +344,8 @@
     "preserveLayout": true,
     "tableDetection": true,
     "listDetection": true,
-    "barcodeDetection": false
+    "barcodeDetection": false,
+    "autoDetectLanguages": false
   },
   "performance": {
     "maxMemoryUsage": "4GB",

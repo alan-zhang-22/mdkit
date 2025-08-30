@@ -16,6 +16,7 @@ public enum OutputType: String, CaseIterable, Codable {
     case markdown = "markdown"
     case prompt = "prompt"
     case markdownLLM = "markdown_llm"
+    case images = "images"
     
     // File extension for each type
     public var fileExtension: String {
@@ -24,6 +25,7 @@ public enum OutputType: String, CaseIterable, Codable {
         case .markdown: return "md"
         case .prompt: return "txt"
         case .markdownLLM: return "md"
+        case .images: return "png"
         }
     }
     
@@ -34,6 +36,7 @@ public enum OutputType: String, CaseIterable, Codable {
         case .markdown: return "markdown"
         case .prompt: return "prompts"
         case .markdownLLM: return "markdown-llm"
+        case .images: return "images"
         }
     }
     
@@ -44,6 +47,7 @@ public enum OutputType: String, CaseIterable, Codable {
         case .markdown: return "Markdown Output"
         case .prompt: return "LLM Prompts"
         case .markdownLLM: return "LLM-Optimized Markdown"
+        case .images: return "PDF Page Images"
         }
     }
 }

@@ -9,11 +9,13 @@ import Foundation
 import Logging
 import mdkitFileManagement
 import mdkitConfiguration
+import mdkitProtocols
 
 // MARK: - Output Generator Protocol
 
 public protocol OutputGenerating: Sendable {
     func generateOutput(from elements: [DocumentElement], outputType: OutputType) throws -> String
+    func generateImageOutput(from elements: [DocumentElement], imageData: Data?) throws -> Data?
 }
 
 // MARK: - Output Generator Implementation
@@ -39,6 +41,23 @@ public final class OutputGenerator: OutputGenerating {
             return try generatePromptOutput(from: elements)
         case .markdownLLM:
             return try generateLLMOptimizedMarkdown(from: elements)
+        case .images:
+            // For images, we return a placeholder text since the actual image data
+            // will be handled separately via generateImageOutput
+            return "# PDF Page Images\n\nImages have been saved directly to the `images/` subdirectory during PDF processing.\n\nThis output type is for reference only - the actual images are saved as PNG files."
+        }
+    }
+    
+    // MARK: - Image Output Generation
+    
+    public func generateImageOutput(from elements: [DocumentElement], imageData: Data?) throws -> Data? {
+        // Return the provided image data if available
+        if let imageData = imageData {
+            logger.info("Image output generation: returning provided image data (\(imageData.count) bytes)")
+            return imageData
+        } else {
+            logger.warning("Image output generation: no image data provided")
+            return nil
         }
     }
     
@@ -201,6 +220,8 @@ public final class OutputGenerator: OutputGenerating {
         logger.info("Generated prompt output with \(elements.count) elements")
         return output
     }
+    
+
     
     // MARK: - LLM-Optimized Markdown Generation
     
@@ -412,7 +433,7 @@ public final class OutputGenerator: OutputGenerating {
         return last[s2.count]
     }
     
-    private func optimizeTextForLLM(_ text: String, elementType: ElementType) -> String {
+    private func optimizeTextForLLM(_ text: String, elementType: DocumentElementType) -> String {
         var optimized = text
         
         // Clean up common OCR artifacts

@@ -20,6 +20,7 @@ public struct MDKitConfig: Codable, Sendable {
     public let duplicationDetection: DuplicationDetectionConfig
     public let positionSorting: PositionSortingConfig
     public let markdownGeneration: MarkdownGenerationConfig
+    public let imageExtraction: ImageExtractionConfig
     public let ocr: OCRConfig
     public let performance: PerformanceConfig
     public let fileManagement: FileManagementConfig
@@ -35,6 +36,7 @@ public struct MDKitConfig: Codable, Sendable {
         duplicationDetection: DuplicationDetectionConfig = DuplicationDetectionConfig(),
         positionSorting: PositionSortingConfig = PositionSortingConfig(),
         markdownGeneration: MarkdownGenerationConfig = MarkdownGenerationConfig(),
+        imageExtraction: ImageExtractionConfig = ImageExtractionConfig(),
         ocr: OCRConfig = OCRConfig(),
         performance: PerformanceConfig = PerformanceConfig(),
         fileManagement: FileManagementConfig = FileManagementConfig(),
@@ -49,6 +51,7 @@ public struct MDKitConfig: Codable, Sendable {
         self.duplicationDetection = duplicationDetection
         self.positionSorting = positionSorting
         self.markdownGeneration = markdownGeneration
+        self.imageExtraction = imageExtraction
         self.ocr = ocr
         self.performance = performance
         self.fileManagement = fileManagement
@@ -664,6 +667,33 @@ public struct PositionSortingConfig: Codable, Sendable {
     }
 }
 
+// MARK: - Image Extraction Configuration
+
+public struct ImageExtractionConfig: Codable, Sendable {
+    public let enabled: Bool
+    public let savePDFPagesAsImages: Bool
+    public let imageFormat: String
+    public let imageQuality: Int
+    public let saveToOutputFolder: Bool
+    public let namingPattern: String
+    
+    public init(
+        enabled: Bool = true,
+        savePDFPagesAsImages: Bool = true,
+        imageFormat: String = "png",
+        imageQuality: Int = 300,
+        saveToOutputFolder: Bool = true,
+        namingPattern: String = "page_{pageNumber}.png"
+    ) {
+        self.enabled = enabled
+        self.savePDFPagesAsImages = savePDFPagesAsImages
+        self.imageFormat = imageFormat
+        self.imageQuality = imageQuality
+        self.saveToOutputFolder = saveToOutputFolder
+        self.namingPattern = namingPattern
+    }
+}
+
 // MARK: - Markdown Generation Configuration
 
 public struct MarkdownGenerationConfig: Codable, Sendable {
@@ -707,10 +737,11 @@ public struct OCRConfig: Codable, Sendable {
     public let tableDetection: Bool
     public let listDetection: Bool
     public let barcodeDetection: Bool
+    public let autoDetectLanguages: Bool
     
     public init(
         recognitionLevel: String = "accurate",
-        languages: [String] = ["zh-CN", "en-US"],
+        languages: [String] = ["zh-Hans", "zh-Hant", "en-US"],
         useLanguageCorrection: Bool = true,
         minimumTextHeight: Double = 0.008,
         customWords: [String] = ["技术规范", "质量标准", "合规要求", "工程文档"],
@@ -718,7 +749,8 @@ public struct OCRConfig: Codable, Sendable {
         preserveLayout: Bool = true,
         tableDetection: Bool = true,
         listDetection: Bool = true,
-        barcodeDetection: Bool = false
+        barcodeDetection: Bool = false,
+        autoDetectLanguages: Bool = false
     ) {
         self.recognitionLevel = recognitionLevel
         self.languages = languages
@@ -730,6 +762,7 @@ public struct OCRConfig: Codable, Sendable {
         self.tableDetection = tableDetection
         self.listDetection = listDetection
         self.barcodeDetection = barcodeDetection
+        self.autoDetectLanguages = autoDetectLanguages
     }
 }
 

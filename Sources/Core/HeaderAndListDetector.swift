@@ -2,6 +2,7 @@ import Foundation
 import CoreGraphics
 import Logging
 import mdkitConfiguration
+import mdkitProtocols
 
 // MARK: - Header and List Detection Error
 

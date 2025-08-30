@@ -4,6 +4,8 @@ import mdkitConfiguration
 import mdkitFileManagement
 import mdkitProtocols
 
+
+
 // MARK: - LLM Processing Protocol (Core Module Version)
 
 /// Protocol for LLM processing operations (simplified version for Core module)
@@ -23,13 +25,13 @@ public class MainProcessor {
     private let fileManager: mdkitFileManagement.FileManaging
     
     /// Document processor for PDF analysis and element extraction
-    private let documentProcessor: UnifiedDocumentProcessor
+    private let documentProcessor: TraditionalOCRDocumentProcessor
     
     /// LLM processor for markdown optimization and structure analysis (optional)
     private let llmProcessor: LLMProcessing?
     
     /// Language detector for identifying document language
-    private let languageDetector: LanguageDetecting
+    private let languageDetector: LanguageDetector
     
     /// Markdown generator for converting document elements to markdown
     private let markdownGenerator: MarkdownGenerator
@@ -42,6 +44,9 @@ public class MainProcessor {
     
     /// Processing statistics
     private var processingStats: ProcessingStatistics
+    
+    /// Stored image data from PDF processing
+    private var storedImageData: [Int: Data] = [:]
     
     // MARK: - Initialization
     
@@ -70,7 +75,11 @@ public class MainProcessor {
         )
         
         // Initialize document processor (now languageDetector is available)
-        self.documentProcessor = UnifiedDocumentProcessor(config: config, fileManager: fileManager, markdownGenerator: markdownGenerator, languageDetector: languageDetector)
+        self.documentProcessor = TraditionalOCRDocumentProcessor(
+            configuration: config, 
+            markdownGenerator: markdownGenerator,
+            languageDetector: languageDetector
+        )
         
         // Initialize LLM processor if enabled
         if config.llm.enabled {
@@ -122,34 +131,50 @@ public class MainProcessor {
             let pdfURL = URL(fileURLWithPath: inputPath)
             let outputURL = URL(fileURLWithPath: "\(config.output.outputDirectory)/temp_output.md")
             
-            // Process the PDF - UnifiedDocumentProcessor now returns elements
-            let processingResult = try await documentProcessor.processPDF(pdfURL, outputFileURL: outputURL, pageRange: pageRange)
+            // Parse page range string to PageRange object
+            let parsedPageRange: PageRange?
+            if let pageRangeString = pageRange {
+                do {
+                    // Get document info to determine total pages for parsing
+                    let documentInfo = try await documentProcessor.getDocumentInfo(at: inputPath)
+                    parsedPageRange = try PageRange.parse(pageRangeString, totalPages: documentInfo.pageCount)
+                } catch {
+                    logger.warning("Failed to parse page range '\(pageRangeString)': \(error.localizedDescription). Processing all pages.")
+                    parsedPageRange = nil
+                }
+            } else {
+                parsedPageRange = nil
+            }
+            
+            // Process the PDF - TraditionalOCRDocumentProcessor returns elements directly
+            let elements = try await documentProcessor.processDocument(at: inputPath, pageRange: parsedPageRange)
             
             // Step 3: Generate all output types from the returned elements
-            let allOutputs = try generateAllOutputTypes(from: processingResult.elements)
+            let allOutputs = try generateAllOutputTypes(from: elements)
             
             // Step 4: Write all output types
             let finalOutputPaths = try writeAllOutputs(
                 outputs: allOutputs,
                 inputPath: inputPath,
-                outputPath: outputPath
+                outputPath: outputPath,
+                elements: elements
             )
             
             // Step 6: Update statistics
             let processingTime = Date().timeIntervalSince(startTime)
             
             // Use the first available output for language detection (prefer markdown)
-            let languageDetectionText = allOutputs[.markdown] ?? allOutputs[.ocr] ?? allOutputs.values.first ?? ""
+            let languageDetectionText = allOutputs[mdkitFileManagement.OutputType.markdown] ?? allOutputs[mdkitFileManagement.OutputType.ocr] ?? allOutputs.values.first ?? ""
             let detectedLanguage = languageDetector.detectLanguage(from: languageDetectionText)
             
             // Get the primary output path (markdown if available, otherwise first available)
-            let primaryOutputPath = finalOutputPaths[.markdown] ?? finalOutputPaths.values.first ?? "multiple outputs"
+            let primaryOutputPath = finalOutputPaths[mdkitFileManagement.OutputType.markdown] ?? finalOutputPaths.values.first ?? "multiple outputs"
             
             processingStats.update(
                 inputPath: inputPath,
                 outputPath: primaryOutputPath,
                 processingTime: processingTime,
-                elementCount: processingResult.elements.count, // Actual element count
+                elementCount: elements.count, // Actual element count
                 detectedLanguage: detectedLanguage
             )
             
@@ -161,7 +186,7 @@ public class MainProcessor {
                 inputPath: inputPath,
                 outputPath: primaryOutputPath,
                 processingTime: processingTime,
-                elementCount: processingResult.elements.count,
+                elementCount: elements.count,
                 statistics: processingStats
             )
             
@@ -290,6 +315,21 @@ public class MainProcessor {
         return outputs
     }
     
+    /// Generate image output data from document elements
+    private func generateImageOutput(from elements: [DocumentElement]) throws -> Data? {
+        // Get the stored image data from the document processor
+        // For now, we'll get the first available image data
+        let allImageData = documentProcessor.getAllStoredImageData()
+        
+        if let firstImageData = allImageData.values.first {
+            logger.info("Image output generation: found image data (\(firstImageData.count) bytes)")
+            return firstImageData
+        } else {
+            logger.warning("Image output generation: no image data available")
+            return nil
+        }
+    }
+    
 
     
     /// Optimize markdown using LLM if enabled
@@ -317,7 +357,8 @@ public class MainProcessor {
     private func writeAllOutputs(
         outputs: [OutputType: String],
         inputPath: String,
-        outputPath: String?
+        outputPath: String?,
+        elements: [DocumentElement]
     ) throws -> [OutputType: String] {
         
         var outputPaths: [OutputType: String] = [:]
@@ -328,7 +369,8 @@ public class MainProcessor {
                     content: content,
                     inputPath: inputPath,
                     outputPath: outputPath,
-                    outputType: outputType
+                    outputType: outputType,
+                    elements: elements
                 )
                 outputPaths[outputType] = outputPath
                 logger.info("\(outputType.description) written to: \(outputPath)")
@@ -378,7 +420,8 @@ public class MainProcessor {
         content: String,
         inputPath: String,
         outputPath: String?,
-        outputType: OutputType
+        outputType: OutputType,
+        elements: [DocumentElement]
     ) throws -> String {
         
         let finalOutputPath: String
@@ -406,7 +449,21 @@ public class MainProcessor {
         )
         
         // Write content to file
-        try content.write(toFile: finalOutputPath, atomically: true, encoding: .utf8)
+        if outputType == .images {
+            // For images, we need to write binary data, not text
+            // Try to get the actual image data
+            if let imageData = try generateImageOutput(from: elements) {
+                try imageData.write(to: URL(fileURLWithPath: finalOutputPath))
+                logger.info("Image data written as binary to: \(finalOutputPath)")
+            } else {
+                // Fallback to writing the text content
+                try content.write(toFile: finalOutputPath, atomically: true, encoding: .utf8)
+                logger.warning("No image data available, wrote placeholder text instead")
+            }
+        } else {
+            // For text-based outputs, write as UTF-8
+            try content.write(toFile: finalOutputPath, atomically: true, encoding: .utf8)
+        }
         
         logger.info("\(outputType.description) written to: \(finalOutputPath)")
         return finalOutputPath

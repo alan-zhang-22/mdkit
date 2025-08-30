@@ -281,13 +281,15 @@
         "^\\d+\\)\\s",
         "^\\d+\\.\\s",
         "^\\d+-\\s",
-        "^\\d+[、.．]\\s"
+        "^\\d+[、.．]\\s",
+        "^\\d+）\\s"
       ],
       "letteredMarkers": [
         "^[a-z]\\)\\s",
         "^[a-z]\\.\\s",
         "^[a-z]-\\s",
-        "^[甲乙丙丁戊己庚辛壬癸]\\s"
+        "^[甲乙丙丁戊己庚辛壬癸]\\s",
+        "^[a-z]）\\s"
       ],
       "bulletMarkers": [
         "^[•\\-\\*]\\s",
@@ -301,7 +303,9 @@
       ],
       "customMarkers": [
         "^[\\u25A0\\u25A1\\u25A2]\\s",
-        "^[\\u25CB\\u25CF]\\s"
+        "^[\\u25CB\\u25CF]\\s",
+        "^[a-z]》\\s",
+        "^\\d+》\\s"
       ]
     },
     "indentation": {
@@ -331,9 +335,17 @@
     "tableFormat": "standard",
     "codeBlockFormat": "fenced"
   },
+  "imageExtraction": {
+    "enabled": true,
+    "savePDFPagesAsImages": true,
+    "imageFormat": "png",
+    "imageQuality": 300,
+    "saveToOutputFolder": true,
+    "namingPattern": "page_{pageNumber}.png"
+  },
   "ocr": {
     "recognitionLevel": "accurate",
-    "languages": ["zh-CN", "en-US"],
+    "languages": ["zh-Hans", "zh-Hant", "en-US"],
     "useLanguageCorrection": true,
     "minimumTextHeight": 0.008,
     "customWords": ["技术规范", "质量标准", "合规要求", "工程文档"],
@@ -341,7 +353,8 @@
     "preserveLayout": true,
     "tableDetection": true,
     "listDetection": true,
-    "barcodeDetection": false
+    "barcodeDetection": false,
+    "autoDetectLanguages": false
   },
   "performance": {
     "maxMemoryUsage": "1GB",
@@ -356,6 +369,7 @@
     "markdownDirectory": "./dev-markdown",
     "logDirectory": "./dev-logs",
     "tempDirectory": "./dev-temp",
+    "imageDirectory": "./images",
     "createDirectories": true,
     "overwriteExisting": true,
     "preserveOriginalNames": true,

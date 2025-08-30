@@ -27,8 +27,8 @@ final class ConfigurationValidatorTests: XCTestCase {
             processing: ProcessingConfig(
                 overlapThreshold: 0.5,
                 enableHeaderFooterDetection: true,
-                headerRegion: [0.0, 0.1],
-                footerRegion: [0.9, 1.0],
+                pageHeaderRegion: [0.0, 0.1],
+                pageFooterRegion: [0.9, 1.0],
                 enableElementMerging: true,
                 mergeDistanceThreshold: 25.0,
                 isMergeDistanceNormalized: false,
@@ -131,7 +131,7 @@ final class ConfigurationValidatorTests: XCTestCase {
     func testInvalidHeaderRegion() {
         let config = MDKitConfig(
             processing: ProcessingConfig(
-                headerRegion: [-0.1, 0.2],
+                pageHeaderRegion: [-0.1, 0.2],
                 horizontalMergeThreshold: 0.15,
                 isHorizontalMergeThresholdNormalized: true
             )
@@ -143,7 +143,7 @@ final class ConfigurationValidatorTests: XCTestCase {
     func testInvalidFooterRegion() {
         let config = MDKitConfig(
             processing: ProcessingConfig(
-                footerRegion: [0.8, 1.1],
+                pageFooterRegion: [0.8, 1.1],
                 horizontalMergeThreshold: 0.15,
                 isHorizontalMergeThresholdNormalized: true
             )
@@ -167,8 +167,8 @@ final class ConfigurationValidatorTests: XCTestCase {
     func testOverlappingHeaderFooterRegions() {
         let config = MDKitConfig(
             processing: ProcessingConfig(
-                headerRegion: [0.0, 0.2],
-                footerRegion: [0.15, 1.0],
+                pageHeaderRegion: [0.0, 0.2],
+                pageFooterRegion: [0.15, 1.0],
                 horizontalMergeThreshold: 0.15,
                 isHorizontalMergeThresholdNormalized: true
             )
@@ -376,8 +376,8 @@ final class ConfigurationValidatorTests: XCTestCase {
         // Verify key configuration sections are present and have expected values
         XCTAssertEqual(config.processing.overlapThreshold, 0.15)
         XCTAssertTrue(config.processing.enableHeaderFooterDetection)
-        XCTAssertEqual(config.processing.headerRegion, [0.0, 0.12])
-        XCTAssertEqual(config.processing.footerRegion, [0.88, 1.0])
+        XCTAssertEqual(config.processing.pageHeaderRegion, [0.0, 0.12])
+        XCTAssertEqual(config.processing.pageFooterRegion, [0.88, 1.0])
         XCTAssertTrue(config.processing.enableElementMerging)
         XCTAssertEqual(config.processing.mergeDistanceThreshold, 0.02)
         XCTAssertTrue(config.processing.isMergeDistanceNormalized)
@@ -475,8 +475,8 @@ final class ConfigurationValidatorTests: XCTestCase {
         // Verify the configuration is identical
         XCTAssertEqual(originalConfig.processing.overlapThreshold, reloadedConfig.processing.overlapThreshold)
         XCTAssertEqual(originalConfig.processing.enableHeaderFooterDetection, reloadedConfig.processing.enableHeaderFooterDetection)
-        XCTAssertEqual(originalConfig.processing.headerRegion, reloadedConfig.processing.headerRegion)
-        XCTAssertEqual(originalConfig.processing.footerRegion, reloadedConfig.processing.footerRegion)
+        XCTAssertEqual(originalConfig.processing.pageHeaderRegion, reloadedConfig.processing.pageHeaderRegion)
+        XCTAssertEqual(originalConfig.processing.pageFooterRegion, reloadedConfig.processing.pageFooterRegion)
         XCTAssertEqual(originalConfig.llm.enabled, reloadedConfig.llm.enabled)
         XCTAssertEqual(originalConfig.llm.backend, reloadedConfig.llm.backend)
         XCTAssertEqual(originalConfig.llm.model.identifier, reloadedConfig.llm.model.identifier)
@@ -703,8 +703,8 @@ final class ConfigurationValidatorTests: XCTestCase {
             processing: ProcessingConfig(
                 overlapThreshold: 0.3,
                 enableHeaderFooterDetection: true,
-                headerRegion: [0.0, 0.12],
-                footerRegion: [0.88, 1.0],
+                pageHeaderRegion: [0.0, 0.12],
+                pageFooterRegion: [0.88, 1.0],
                 enableElementMerging: true,
                 mergeDistanceThreshold: 30.0,
                 isMergeDistanceNormalized: false,
@@ -801,8 +801,8 @@ final class ConfigurationValidatorTests: XCTestCase {
         // Verify key configuration sections are present and have expected values
         XCTAssertEqual(config.processing.overlapThreshold, 0.15)
         XCTAssertTrue(config.processing.enableHeaderFooterDetection)
-        XCTAssertEqual(config.processing.headerRegion, [0.0, 0.12])
-        XCTAssertEqual(config.processing.footerRegion, [0.88, 1.0])
+        XCTAssertEqual(config.processing.pageHeaderRegion, [0.0, 0.12])
+        XCTAssertEqual(config.processing.pageFooterRegion, [0.88, 1.0])
         XCTAssertTrue(config.processing.enableElementMerging)
         XCTAssertEqual(config.processing.mergeDistanceThreshold, 0.02)
         XCTAssertTrue(config.processing.isMergeDistanceNormalized)
@@ -900,8 +900,8 @@ final class ConfigurationValidatorTests: XCTestCase {
         // Verify the configuration is identical
         XCTAssertEqual(originalConfig.processing.overlapThreshold, reloadedConfig.processing.overlapThreshold)
         XCTAssertEqual(originalConfig.processing.enableHeaderFooterDetection, reloadedConfig.processing.enableHeaderFooterDetection)
-        XCTAssertEqual(originalConfig.processing.headerRegion, reloadedConfig.processing.headerRegion)
-        XCTAssertEqual(originalConfig.processing.footerRegion, reloadedConfig.processing.footerRegion)
+        XCTAssertEqual(originalConfig.processing.pageHeaderRegion, reloadedConfig.processing.pageHeaderRegion)
+        XCTAssertEqual(originalConfig.processing.pageFooterRegion, reloadedConfig.processing.pageFooterRegion)
         XCTAssertEqual(originalConfig.llm.enabled, reloadedConfig.llm.enabled)
         XCTAssertEqual(originalConfig.llm.backend, reloadedConfig.llm.backend)
         XCTAssertEqual(originalConfig.llm.model.identifier, reloadedConfig.llm.model.identifier)
