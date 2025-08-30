@@ -50,57 +50,38 @@ public class MainProcessor {
     
     // MARK: - Initialization
     
-    /// Initialize the main processor with configuration
-    /// - Parameter config: Configuration for the processor
-    public init(config: MDKitConfig) throws {
+    /// Initialize the main processor with all required services
+    /// - Parameters:
+    ///   - config: Configuration for the processor
+    ///   - documentProcessor: Document processor for PDF analysis
+    ///   - languageDetector: Language detection service
+    ///   - markdownGenerator: Markdown generation service
+    ///   - fileManager: File management service
+    ///   - outputGenerator: Output generation service
+    ///   - llmProcessor: Optional LLM processing service
+    public init(
+        config: MDKitConfig,
+        documentProcessor: TraditionalOCRDocumentProcessor,
+        languageDetector: LanguageDetector,
+        markdownGenerator: MarkdownGenerator,
+        fileManager: mdkitFileManagement.FileManaging,
+        outputGenerator: OutputGenerator,
+        llmProcessor: LLMProcessing? = nil
+    ) {
         self.config = config
+        self.documentProcessor = documentProcessor
+        self.languageDetector = languageDetector
+        self.markdownGenerator = markdownGenerator
+        self.fileManager = fileManager
+        self.outputGenerator = outputGenerator
+        self.llmProcessor = llmProcessor
         self.logger = Logger(label: "mdkit.mainprocessor")
         self.processingStats = ProcessingStatistics()
         
-        // Initialize file manager
-        self.fileManager = MDKitFileManager(config: config.fileManagement)
-        
-        // Initialize markdown generator
-        self.markdownGenerator = MarkdownGenerator(config: config.markdownGeneration)
-        
-        // Initialize output generator for multiple output types
-        self.outputGenerator = OutputGenerator(config: config)
-        
-        // Initialize language detector first
-        let minimumTextLength = config.processing.languageDetection?.minimumTextLength ?? 10
-        let confidenceThreshold = config.processing.languageDetection?.confidenceThreshold ?? 0.6
-        self.languageDetector = LanguageDetector(
-            minimumTextLength: minimumTextLength,
-            confidenceThreshold: confidenceThreshold
-        )
-        
-        // Initialize document processor (now languageDetector is available)
-        self.documentProcessor = TraditionalOCRDocumentProcessor(
-            configuration: config, 
-            markdownGenerator: markdownGenerator,
-            languageDetector: languageDetector
-        )
-        
-        // Initialize LLM processor if enabled
-        if config.llm.enabled {
-            // Note: LLM processor initialization would require additional dependencies
-            // For now, we'll set it to nil and handle it gracefully
-            self.llmProcessor = nil
-            logger.warning("LLM processing requested but not available in Core module")
-        } else {
-            self.llmProcessor = nil
-        }
-        
-        logger.info("MainProcessor initialized successfully")
+        logger.info("MainProcessor initialized successfully with injected services")
     }
     
-    /// Initialize the main processor with default configuration loaded from file
-    /// Uses ConfigurationManager to load development configuration
-    public convenience init() throws {
-        let configManager = ConfigurationManager()
-        let config = try configManager.loadConfigurationFromResources(fileName: "dev-config.json")
-        try self.init(config: config)
-    }
+
     
     // MARK: - Main Processing Methods
     

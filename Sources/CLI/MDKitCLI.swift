@@ -2,7 +2,10 @@ import Foundation
 import ArgumentParser
 import mdkitCore
 import mdkitConfiguration
+import mdkitFileManagement
+import mdkitProtocols
 
+@available(macOS 26, *)
 @main
 struct MDKitCLI: AsyncParsableCommand {
     // Define the command-line structure with subcommands
@@ -11,36 +14,7 @@ struct MDKitCLI: AsyncParsableCommand {
         subcommands: [Convert.self, Test.self, Validate.self]
     )
     
-    // Initialize logging system when the CLI starts
-    static func initializeLogging(verbose: Bool = false) {
-        do {
-            if verbose {
-                // For verbose mode, enable both console and file logging with debug level
-                try LoggingConfiguration.configure(
-                    level: .debug,
-                    logFileName: "mdkit-verbose.log",
-                    logDirectory: "./logs/verbose"
-                )
-                print("🔧 Logging system initialized with VERBOSE mode - logs will be written to ./logs/verbose/")
-            } else {
-                // For normal mode, enable both console and file logging with info level
-                try LoggingConfiguration.configure(
-                    level: .info,
-                    logFileName: "mdkit.log",
-                    logDirectory: "./logs"
-                )
-                print("🔧 Logging system initialized - logs will be written to ./logs/")
-            }
-        } catch {
-            print("⚠️  Warning: Could not initialize file logging: \(error.localizedDescription)")
-            print("   Logs will only be displayed in console")
-        }
-    }
-
     func run() async throws {
-        // Initialize logging system with default settings
-        Self.initializeLogging(verbose: false)
-        
         print("mdkit - PDF to Markdown conversion tool with OCR")
         print("=================================================")
         print("")
@@ -97,9 +71,6 @@ struct MDKitCLI: AsyncParsableCommand {
         var config: String?
 
         func run() async throws {
-            // Initialize logging system with the verbose flag from this command
-            MDKitCLI.initializeLogging(verbose: verbose)
-            
             print("🔄 Starting PDF conversion...")
             print("   Input file: \(inputFile)")
             print("   Page range: \(pages)")
@@ -121,20 +92,14 @@ struct MDKitCLI: AsyncParsableCommand {
             print("⚡ Processing with MainProcessor")
             
             do {
-                // Load configuration from specified file or use default
-                let configManager = ConfigurationManager()
-                let configuration: MDKitConfig
+                // Initialize ApplicationContext first
+                print("   🔧 Initializing ApplicationContext...")
+                try ApplicationContext.shared.initialize()
                 
-                if let configPath = config {
-                    print("   📋 Loading configuration from: \(configPath)")
-                    configuration = try configManager.loadConfiguration(from: configPath)
-                } else {
-                    print("   📋 Loading default configuration: dev-config.json")
-                    configuration = try configManager.loadConfigurationFromResources(fileName: "dev-config.json")
+                // Get the MainProcessor from ApplicationContext
+                guard let mainProcessor = ApplicationContext.shared.getMainProcessor() else {
+                    throw PDFProcessingError.processingFailed(underlying: PDFProcessingError.outputWriteFailed(path: "ApplicationContext not initialized"))
                 }
-                
-                // Initialize MainProcessor with the loaded configuration
-                let mainProcessor = try MainProcessor(config: configuration)
                 
                 // Create processing options
                 let options = ProcessingOptions(
@@ -144,7 +109,7 @@ struct MDKitCLI: AsyncParsableCommand {
                     outputFormat: .markdown
                 )
                 
-                print("   🚀 Initializing MainProcessor...")
+                print("   🚀 MainProcessor ready from ApplicationContext")
                 print("   ✅ Configuration loaded successfully")
                 print("   🔍 Starting PDF processing...")
                 
@@ -227,7 +192,14 @@ struct MDKitCLI: AsyncParsableCommand {
             print("   Config path: \(config ?? "default")")
             
             do {
-                _ = try MainProcessor(config: MDKitConfig())
+                // Initialize ApplicationContext first
+                print("   🔧 Initializing ApplicationContext...")
+                try ApplicationContext.shared.initialize()
+                
+                // Get the MainProcessor from ApplicationContext
+                guard let mainProcessor = ApplicationContext.shared.getMainProcessor() else {
+                    throw ValidationError.validationFailed
+                }
                 
                 print("")
                 print("📋 Testing MainProcessor...")
@@ -240,6 +212,10 @@ struct MDKitCLI: AsyncParsableCommand {
                 
                 // Test file management
                 print("   ✅ File management system ready")
+                
+                // Test that mainProcessor is working
+                _ = mainProcessor.getConfiguration()
+                print("   ✅ MainProcessor configuration access verified")
                 
                 print("")
                 print("📋 Validation Results:")

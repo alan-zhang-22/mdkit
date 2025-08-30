@@ -116,6 +116,12 @@ public class ConfigurationManager: ConfigurationManaging {
         }
     }
     
+    /// Loads the default configuration (dev-config.json from resources)
+    /// - Returns: Loaded MDKitConfig or throws error if loading fails
+    public func loadDefaultConfiguration() throws -> MDKitConfig {
+        return try loadConfigurationFromResources(fileName: "dev-config.json")
+    }
+    
     /// Creates a minimal default configuration with essential settings
     /// - Returns: MDKitConfig with minimal but functional defaults
     private func createMinimalDefaultConfiguration() -> MDKitConfig {

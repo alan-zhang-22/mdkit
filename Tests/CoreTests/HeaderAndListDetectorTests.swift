@@ -1,6 +1,8 @@
 import XCTest
+import Foundation
 import CoreGraphics
 @testable import mdkitCore
+@testable import mdkitProtocols
 @testable import mdkitConfiguration
 
 final class HeaderAndListDetectorTests: XCTestCase {
@@ -274,8 +276,7 @@ final class HeaderAndListDetectorTests: XCTestCase {
             contentData: Data(),
             confidence: 0.9,
             pageNumber: 1,
-            text: text,
-            metadata: [:]
+            text: text
         )
     }
 }

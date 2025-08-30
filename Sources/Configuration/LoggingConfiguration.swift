@@ -4,13 +4,63 @@ import Logging
 /// Simple logging configuration utility for mdkit
 public struct LoggingConfiguration {
     
-    /// Get the documents directory for logging
-    private static func getDocumentsDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths[0]
+    /// Configure the logging system using configuration from MDKitConfig
+    /// - Parameter config: The configuration object containing logging settings
+    public static func configure(from config: MDKitConfig) throws {
+        guard config.logging.enabled else {
+            // If logging is disabled, only use console output
+            let consoleHandler = StreamLogHandler.standardOutput(label: "mdkit.console")
+            LoggingSystem.bootstrap { _ in consoleHandler }
+            return
+        }
+        
+        // Parse log level from configuration
+        let logLevel = Logger.Level(rawValue: config.logging.level) ?? .info
+        
+        // Get log directory from configuration
+        let logDirectory = config.logging.outputFolder
+        let logFileName = "mdkit_\(DateFormatter().string(from: Date())).log"
+        
+        // Create logs directory if it doesn't exist
+        let fileManager = FileManager.default
+        if !fileManager.fileExists(atPath: logDirectory) {
+            try fileManager.createDirectory(atPath: logDirectory, withIntermediateDirectories: true)
+        }
+        
+        // Configure file logging using standard library
+        let logFileURL = URL(fileURLWithPath: logDirectory).appendingPathComponent(logFileName)
+        
+        // Create handlers based on configuration
+        var handlers: [LogHandler] = []
+        
+        // Add console handler if enabled
+        if config.logging.enableConsoleOutput {
+            let consoleHandler = StreamLogHandler.standardOutput(label: "mdkit.console")
+            handlers.append(consoleHandler)
+        }
+        
+        // Add file handler
+        let fileHandler = try FileLogHandler(logFileURL: logFileURL, level: logLevel)
+        handlers.append(fileHandler)
+        
+        // Bootstrap the logging system with configured handlers
+        let finalHandlers = handlers
+        LoggingSystem.bootstrap { label in
+            var multiplexHandler = MultiplexLogHandler(finalHandlers)
+            multiplexHandler.logLevel = logLevel
+            return multiplexHandler
+        }
+        
+        // Log that configuration is complete
+        let logger = Logger(label: "mdkit.config")
+        logger.info("Logging system configured successfully")
+        logger.info("Log level: \(logLevel)")
+        logger.info("Log file: \(logFileURL.path)")
+        logger.info("Console logging: \(config.logging.enableConsoleOutput ? "enabled" : "disabled")")
+        logger.info("File logging: enabled")
     }
     
-    /// Configure the logging system with file and console output
+    /// Configure the logging system with file and console output (legacy method)
     /// - Parameters:
     ///   - level: The minimum log level to output
     ///   - logFileName: The name of the log file
@@ -27,7 +77,7 @@ public struct LoggingConfiguration {
         }
         
         // Configure file logging using standard library
-        let logFileURL = getDocumentsDirectory().appendingPathComponent(logFileName)
+        let logFileURL = URL(fileURLWithPath: logDirectory).appendingPathComponent(logFileName)
         
         // Create a custom file handler that writes to both file and console
         let fileHandler = try FileLogHandler(logFileURL: logFileURL, level: level)
