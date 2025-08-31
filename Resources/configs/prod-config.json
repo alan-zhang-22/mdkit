@@ -2,7 +2,7 @@
   "processing": {
     "overlapThreshold": 0.15,
     "enableHeaderFooterDetection": true,
-    "pageHeaderRegion": [0.90, 1.0],
+    "pageHeaderRegion": [0.85, 1.0],
     "pageFooterRegion": [0.0, 0.1],
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.01,
@@ -245,9 +245,13 @@
       "namedHeaders": [
         "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*\\s*$",
         "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s*$",
+        "^(附录)\\s*[A-Z]\\s*$",
+        "^(附录)\\s*[A-Z]\\s*（[^）]+）",
+        "^(附录)\\s*[A-Z]\\s*（[^）]+）[^：]*：",
         "^第\\d+[章节]\\s*$",
         "^(前言|引言|附录)[⋯…]*\\s*$",
-        "^(Preface|Introduction|Appendix)\\s*$"
+        "^(参考文献)[^\\w]*$",
+        "^(Preface|Introduction|Appendix|References)\\s*$"
       ]
     },
     "levelCalculation": {

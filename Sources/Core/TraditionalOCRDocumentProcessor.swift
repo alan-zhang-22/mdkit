@@ -210,6 +210,12 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         // Convert observations to document elements
         let elements = try convertObservationsToElements(filteredObservations, pageNumber: pageNumber)
         
+        // Check if page has content to process
+        if elements.isEmpty {
+            logger.info("Page \(pageNumber) has no content - skipping post-processing")
+            return []
+        }
+        
         // Post-process elements
         let processedElements = try await postProcessElements(elements)
         
@@ -282,6 +288,12 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     public func detectLanguage(from elements: [DocumentElement]) throws -> String {
         logger.info("Detecting language from \(elements.count) elements")
         
+        // Handle empty elements gracefully
+        if elements.isEmpty {
+            logger.info("No elements provided for language detection - using default language 'en'")
+            return "en"
+        }
+        
         // Try to detect language from the original PDF text first (if available)
         if let pdfText = try? extractTextFromPDFPage() {
             logger.info("=== PDF TEXT EXTRACTION SUCCESSFUL ===")
@@ -324,7 +336,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         }
         
         if allText.isEmpty {
-            throw mdkitProtocols.DocumentProcessingError.languageDetectionFailed("No text content to analyze")
+            logger.info("No text content found in elements - using default language 'en'")
+            return "en"
         }
         
         logger.info("=== COMBINED TEXT FOR LANGUAGE DETECTION ===")
@@ -561,6 +574,12 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     
     private func postProcessElements(_ elements: [DocumentElement]) async throws -> [DocumentElement] {
         var processedElements = elements
+        
+        // Check if page has content to process
+        if elements.isEmpty {
+            logger.info("No elements to process - skipping post-processing")
+            return []
+        }
         
         // Detect language
         let language = try detectLanguage(from: processedElements)
