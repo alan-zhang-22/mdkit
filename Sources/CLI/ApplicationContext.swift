@@ -106,7 +106,10 @@ public final class ApplicationContext: @unchecked Sendable {
             confidenceThreshold: confidenceThreshold
         )
         
-        // Step 5: Initialize document processor (depends on markdownGenerator and languageDetector)
+        // Step 5: Initialize header and list detector (no dependencies, but needs config)
+        let headerAndListDetector = HeaderAndListDetector(config: config)
+        
+        // Step 6: Initialize document processor (depends on markdownGenerator, languageDetector, and headerAndListDetector)
         guard let markdownGenerator = self.markdownGenerator,
               let languageDetector = self.languageDetector else {
             throw ConfigurationError.componentInitializationFailed
@@ -115,10 +118,11 @@ public final class ApplicationContext: @unchecked Sendable {
         let documentProcessor = TraditionalOCRDocumentProcessor(
             configuration: config,
             markdownGenerator: markdownGenerator,
-            languageDetector: languageDetector
+            languageDetector: languageDetector,
+            headerAndListDetector: headerAndListDetector
         )
         
-        // Step 6: Initialize main processor with all injected services
+        // Step 7: Initialize main processor with all injected services
         self.mainProcessor = MainProcessor(
             config: config,
             documentProcessor: documentProcessor,

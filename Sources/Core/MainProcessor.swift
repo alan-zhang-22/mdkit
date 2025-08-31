@@ -110,7 +110,7 @@ public class MainProcessor {
             
             // Step 2: Process the PDF document
             let pdfURL = URL(fileURLWithPath: inputPath)
-            let outputURL = URL(fileURLWithPath: "\(config.output.outputDirectory)/temp_output.md")
+            let outputURL = URL(fileURLWithPath: "\(config.fileManagement.outputDirectory)/temp_output.md")
             
             // Parse page range string to PageRange object
             let parsedPageRange: PageRange?
@@ -379,7 +379,7 @@ public class MainProcessor {
             // Generate default output path
             let inputFileName = URL(fileURLWithPath: inputPath).lastPathComponent
             let baseName = inputFileName.replacingOccurrences(of: ".pdf", with: "")
-            finalOutputPath = "\(config.output.outputDirectory)/\(baseName)\(config.output.filenamePattern)"
+            finalOutputPath = "\(config.fileManagement.outputDirectory)/\(baseName)\(config.fileManagement.filenamePattern)"
         }
         
         // Ensure output directory exists
@@ -419,7 +419,7 @@ public class MainProcessor {
             finalOutputPath = "\(baseOutputDir)\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
         } else {
             // Generate default output path for specific output type
-            finalOutputPath = "\(config.output.outputDirectory)/\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
+            finalOutputPath = "\(config.fileManagement.outputDirectory)/\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
         }
         
         // Ensure output directory exists

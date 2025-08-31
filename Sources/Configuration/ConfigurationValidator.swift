@@ -71,11 +71,11 @@ public struct ConfigurationValidator {
             errors.append("Processing config: \(error.localizedDescription)")
         }
         
-        // Validate output configuration
+        // Validate file management configuration (includes output settings)
         do {
-            try validateOutputConfig(config.output)
+            try validateFileManagementConfig(config.fileManagement)
         } catch {
-            errors.append("Output config: \(error.localizedDescription)")
+            errors.append("File management config: \(error.localizedDescription)")
         }
         
         // Validate LLM configuration
@@ -143,7 +143,7 @@ public struct ConfigurationValidator {
         }
     }
     
-    private func validateOutputConfig(_ config: OutputConfig) throws {
+    private func validateFileManagementConfig(_ config: FileManagementConfig) throws {
         // Validate output directory
         if config.outputDirectory.isEmpty {
             throw ConfigurationValidationError.invalidOutputDirectory(config.outputDirectory)
@@ -159,6 +159,15 @@ public struct ConfigurationValidator {
             throw ConfigurationValidationError.invalidFilenamePattern(
                 "Filename pattern should contain placeholders like {filename}, {timestamp}, etc."
             )
+        }
+        
+        // Validate other file management settings
+        if config.markdownDirectory.isEmpty {
+            throw ConfigurationValidationError.invalidOutputDirectory(config.markdownDirectory)
+        }
+        
+        if config.tempDirectory.isEmpty {
+            throw ConfigurationValidationError.invalidOutputDirectory(config.tempDirectory)
         }
     }
     
@@ -313,13 +322,8 @@ public struct ConfigurationValidator {
             conflicts.append("LLM optimization is enabled but LLM processing is disabled")
         }
         
-        // Check if file logging is enabled but log files are disabled
-        if config.logging.enabled && config.logging.enableConsoleOutput && !config.output.createLogFiles {
-            conflicts.append("File logging is enabled but log file creation is disabled")
-        }
-        
         // Check if output directory and log directory are the same
-        if config.output.outputDirectory == config.logging.outputFolder {
+        if config.fileManagement.outputDirectory == config.logging.outputFolder {
             conflicts.append("Output directory and log directory should be different to avoid conflicts")
         }
         

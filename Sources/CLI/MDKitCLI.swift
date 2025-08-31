@@ -59,7 +59,7 @@ struct MDKitCLI: AsyncParsableCommand {
         var pages: String = "all"
         
         @Option(name: .long, help: "Output directory for the markdown file")
-        var output: String = "output"
+        var output: String?
         
         @Flag(name: .long, help: "Enable LLM optimization")
         var enableLLM: Bool = false
@@ -76,7 +76,7 @@ struct MDKitCLI: AsyncParsableCommand {
             print("   Page range: \(pages)")
             print("   Configuration: \(config ?? "dev-config.json (default)")")
             print("   Dry run: \(dryRun ? "✅ Yes" : "❌ No")")
-            print("   Output directory: \(output)")
+            print("   Output directory: \(output ?? "default")")
             print("   LLM optimization: \(enableLLM ? "✅ Enabled" : "❌ Disabled")")
             print("   Verbose logging: \(verbose ? "✅ Enabled" : "❌ Disabled")")
             
@@ -90,6 +90,22 @@ struct MDKitCLI: AsyncParsableCommand {
             
             print("")
             print("⚡ Processing with MainProcessor")
+            
+            // Load configuration to get default output directory
+            let configManager = ConfigurationManager()
+            let configuration: MDKitConfig
+            
+            if let configPath = config {
+                print("   📋 Loading configuration from: \(configPath)")
+                configuration = try configManager.loadConfiguration(from: configPath)
+            } else {
+                print("   📋 Loading default configuration: dev-config.json")
+                configuration = try configManager.loadConfigurationFromResources(fileName: "dev-config.json")
+            }
+            
+                            // Determine output directory: CLI parameter overrides config default
+                let outputDirectory = output ?? configuration.fileManagement.outputDirectory
+                print("   📁 Output directory: \(outputDirectory) (from \(output != nil ? "CLI parameter" : "configuration"))")
             
             do {
                 // Initialize ApplicationContext first
@@ -116,7 +132,7 @@ struct MDKitCLI: AsyncParsableCommand {
                 // Process the PDF using the existing infrastructure
                 let result = try await mainProcessor.processPDF(
                     inputPath: inputFile,
-                    outputPath: output,
+                    outputPath: outputDirectory,
                     options: options,
                     pageRange: pages == "all" ? nil : pages
                 )
@@ -148,7 +164,8 @@ struct MDKitCLI: AsyncParsableCommand {
             }
             
             print("")
-            print("📁 Output saved as: \(inputFile.replacingOccurrences(of: ".pdf", with: ".md").replacingOccurrences(of: ".PDF", with: ".md"))")
+            print("📁 Output saved to directory: \(outputDirectory)")
+            print("   📄 Markdown file: \(inputFile.replacingOccurrences(of: ".pdf", with: ".md").replacingOccurrences(of: ".PDF", with: ".md"))")
         }
     }
     

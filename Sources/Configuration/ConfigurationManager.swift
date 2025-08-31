@@ -127,7 +127,6 @@ public class ConfigurationManager: ConfigurationManaging {
     private func createMinimalDefaultConfiguration() -> MDKitConfig {
         return MDKitConfig(
             processing: ProcessingConfig(),
-            output: OutputConfig(),
             llm: LLMConfig(),
             headerFooterDetection: HeaderFooterDetectionConfig(),
             headerDetection: HeaderDetectionConfig(markdownLevelOffset: 0),
@@ -177,19 +176,7 @@ public class ConfigurationManager: ConfigurationManaging {
                 isMergeDistanceNormalized: true,
                 enableLLMOptimization: true
             ),
-            output: OutputConfig(
-                outputDirectory: "./dev-output",
-                filenamePattern: "{filename}_dev.md",
-                createLogFiles: true,
-                overwriteExisting: true,
-                markdown: MarkdownConfig(
-                    headerLevelOffset: 0,
-                    useATXHeaders: true,
-                    addTableOfContents: true,
-                    preserveFormatting: true,
-                    listMarkerStyle: "-"
-                )
-            ),
+
             llm: LLMConfig(
                 enabled: true,
                 backend: "LocalLLMClientLlama",
@@ -450,12 +437,17 @@ public class ConfigurationManager: ConfigurationManaging {
             fileManagement: FileManagementConfig(
                 outputDirectory: "./dev-output",
                 markdownDirectory: "./dev-markdown",
-                logDirectory: "./dev-logs",
                 tempDirectory: "./dev-temp",
+                imageDirectory: "./images",
                 createDirectories: true,
                 overwriteExisting: true,
                 preserveOriginalNames: true,
-                fileNamingStrategy: "timestamped"
+                fileNamingStrategy: "timestamped",
+                filenamePattern: "{filename}_dev.md",
+                addTableOfContents: true,
+                useATXHeaders: true,
+                preserveFormatting: true,
+                listMarkerStyle: "-"
             ),
             logging: LoggingConfig(
                 enabled: true,
@@ -535,12 +527,12 @@ public class ConfigurationManager: ConfigurationManaging {
             }
         }
         
-        // Validate output configuration
-        if config.output.outputDirectory.isEmpty {
+        // Validate file management configuration (includes output settings)
+        if config.fileManagement.outputDirectory.isEmpty {
             errors.append("Output directory cannot be empty")
         }
         
-        if config.output.filenamePattern.isEmpty {
+        if config.fileManagement.filenamePattern.isEmpty {
             errors.append("Output filename pattern cannot be empty")
         }
         
@@ -685,15 +677,11 @@ public class ConfigurationManager: ConfigurationManaging {
         
         // Validate file management configuration
         if config.fileManagement.outputDirectory.isEmpty {
-            errors.append("File management output directory cannot be empty")
+            errors.append("Output directory cannot be empty")
         }
         
         if config.fileManagement.markdownDirectory.isEmpty {
             errors.append("File management markdown directory cannot be empty")
-        }
-        
-        if config.fileManagement.logDirectory.isEmpty {
-            errors.append("File management log directory cannot be empty")
         }
         
         if config.fileManagement.tempDirectory.isEmpty {

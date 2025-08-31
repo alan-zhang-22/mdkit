@@ -12,7 +12,6 @@ import Logging
 
 public struct MDKitConfig: Codable, Sendable {
     public let processing: ProcessingConfig
-    public let output: OutputConfig
     public let llm: LLMConfig
     public let headerFooterDetection: HeaderFooterDetectionConfig
     public let headerDetection: HeaderDetectionConfig
@@ -28,7 +27,6 @@ public struct MDKitConfig: Codable, Sendable {
     
     public init(
         processing: ProcessingConfig = ProcessingConfig(),
-        output: OutputConfig = OutputConfig(),
         llm: LLMConfig = LLMConfig(),
         headerFooterDetection: HeaderFooterDetectionConfig = HeaderFooterDetectionConfig(),
         headerDetection: HeaderDetectionConfig = HeaderDetectionConfig(markdownLevelOffset: 0),
@@ -43,7 +41,6 @@ public struct MDKitConfig: Codable, Sendable {
         logging: LoggingConfig = LoggingConfig()
     ) {
         self.processing = processing
-        self.output = output
         self.llm = llm
         self.headerFooterDetection = headerFooterDetection
         self.headerDetection = headerDetection
@@ -128,52 +125,6 @@ public struct LanguageDetectionConfig: Codable, Sendable {
         self.enableMultilingualDetection = enableMultilingualDetection
         self.maxLanguages = maxLanguages
         self.fallbackLanguage = fallbackLanguage
-    }
-}
-
-// MARK: - Output Configuration
-
-public struct OutputConfig: Codable, Sendable {
-    public let outputDirectory: String
-    public let filenamePattern: String
-    public let createLogFiles: Bool
-    public let overwriteExisting: Bool
-    public let markdown: MarkdownConfig
-    
-    public init(
-        outputDirectory: String = "./dev-output",
-        filenamePattern: String = "{filename}_dev.md",
-        createLogFiles: Bool = true,
-        overwriteExisting: Bool = true,
-        markdown: MarkdownConfig = MarkdownConfig()
-    ) {
-        self.outputDirectory = outputDirectory
-        self.filenamePattern = filenamePattern
-        self.createLogFiles = createLogFiles
-        self.overwriteExisting = overwriteExisting
-        self.markdown = markdown
-    }
-}
-
-public struct MarkdownConfig: Codable, Sendable {
-    public let headerLevelOffset: Int
-    public let useATXHeaders: Bool
-    public let addTableOfContents: Bool
-    public let preserveFormatting: Bool
-    public let listMarkerStyle: String
-    
-    public init(
-        headerLevelOffset: Int = 0,
-        useATXHeaders: Bool = true,
-        addTableOfContents: Bool = true,
-        preserveFormatting: Bool = true,
-        listMarkerStyle: String = "-"
-    ) {
-        self.headerLevelOffset = headerLevelOffset
-        self.useATXHeaders = useATXHeaders
-        self.addTableOfContents = addTableOfContents
-        self.preserveFormatting = preserveFormatting
-        self.listMarkerStyle = listMarkerStyle
     }
 }
 
@@ -798,31 +749,48 @@ public struct PerformanceConfig: Codable, Sendable {
 public struct FileManagementConfig: Codable, Sendable {
     public let outputDirectory: String
     public let markdownDirectory: String
-    public let logDirectory: String
     public let tempDirectory: String
+    public let imageDirectory: String
     public let createDirectories: Bool
     public let overwriteExisting: Bool
     public let preserveOriginalNames: Bool
     public let fileNamingStrategy: String
+    public let filenamePattern: String
+    
+    // Markdown generation settings
+    public let addTableOfContents: Bool
+    public let useATXHeaders: Bool
+    public let preserveFormatting: Bool
+    public let listMarkerStyle: String
     
     public init(
         outputDirectory: String = "./dev-output",
         markdownDirectory: String = "./dev-markdown",
-        logDirectory: String = "./dev-logs",
         tempDirectory: String = "./dev-temp",
+        imageDirectory: String = "./images",
         createDirectories: Bool = true,
         overwriteExisting: Bool = true,
         preserveOriginalNames: Bool = true,
-        fileNamingStrategy: String = "timestamped"
+        fileNamingStrategy: String = "timestamped",
+        filenamePattern: String = "{filename}.md",
+        addTableOfContents: Bool = true,
+        useATXHeaders: Bool = true,
+        preserveFormatting: Bool = true,
+        listMarkerStyle: String = "-"
     ) {
         self.outputDirectory = outputDirectory
         self.markdownDirectory = markdownDirectory
-        self.logDirectory = logDirectory
         self.tempDirectory = tempDirectory
+        self.imageDirectory = imageDirectory
         self.createDirectories = createDirectories
         self.overwriteExisting = overwriteExisting
         self.preserveOriginalNames = preserveOriginalNames
         self.fileNamingStrategy = fileNamingStrategy
+        self.filenamePattern = filenamePattern
+        self.addTableOfContents = addTableOfContents
+        self.useATXHeaders = useATXHeaders
+        self.preserveFormatting = preserveFormatting
+        self.listMarkerStyle = listMarkerStyle
     }
 }
 

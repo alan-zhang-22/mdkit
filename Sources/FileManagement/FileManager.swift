@@ -60,7 +60,6 @@ public protocol FileManaging: Sendable {
     func closeOutputStream(_ stream: OutputStream) throws
     func generateOutputPaths(for inputFile: String, outputType: OutputType) -> OutputPaths
     func ensureDirectoriesExist() throws
-    func cleanupTempFiles() throws
     
     // Writing operations
     func writeString(_ content: String, to stream: OutputStream) throws
@@ -228,7 +227,6 @@ public final class MDKitFileManager: FileManaging {
             try createDirectoryIfNeeded(config.outputDirectory)
             try createDirectoryIfNeeded(config.tempDirectory)
             try createDirectoryIfNeeded(config.markdownDirectory)
-            try createDirectoryIfNeeded(config.logDirectory)
         }
     }
     

@@ -20,19 +20,6 @@
       "fallbackLanguage": "en"
     }
   },
-  "output": {
-    "outputDirectory": "./output",
-    "filenamePattern": "{filename}.md",
-    "createLogFiles": true,
-    "overwriteExisting": false,
-    "markdown": {
-      "headerLevelOffset": 0,
-      "useATXHeaders": true,
-      "addTableOfContents": true,
-      "preserveFormatting": true,
-      "listMarkerStyle": "dash"
-    }
-  },
   "llm": {
     "enabled": true,
     "backend": "LocalLLMClientLlama",
@@ -233,16 +220,17 @@
   },
   "headerDetection": {
     "enabled": true,
-    "sameLineTolerance": 5.0,
+    "sameLineTolerance": 0.01,
     "enableHeaderMerging": true,
     "enableLevelCalculation": true,
     "markdownLevelOffset": 0,
     "patterns": {
       "numberedHeaders": [
-        "^\\d+(?:\\.\\d+)*\\s*$",
-        "^\\d+[A-Z](?:\\.\\d+)*\\s*$",
-        "^第\\d+[章节]\\s*$",
-        "^\\d+[、.．]\\s*$"
+        "^\\d+(?:\\.\\d+)*\\s",
+        "^\\d+[A-Z](?:\\.\\d+)*\\s",
+        "^第\\d+[章节]\\s",
+        "^\\d+[、.．]\\s",
+        "^\\d+(?:\\.\\d+)*$"
       ],
       "letteredHeaders": [
         "^[A-Z](?:\\.\\d+)*\\s*$",
@@ -273,10 +261,10 @@
       }
     }
   },
-  "listDetection": {
-    "enabled": true,
-    "sameLineTolerance": 5.0,
-    "enableListItemMerging": true,
+          "listDetection": {
+          "enabled": true,
+          "sameLineTolerance": 0.01,
+          "enableListItemMerging": true,
     "enableLevelCalculation": true,
     "enableNestedLists": true,
     "patterns": {
@@ -290,7 +278,8 @@
         "^[a-z]\\)\\s*$",
         "^[a-z]\\.\\s*$",
         "^[a-z]-\\s*$",
-        "^[甲乙丙丁戊己庚辛壬癸]\\s*$"
+        "^[甲乙丙丁戊己庚辛壬癸]\\s*$",
+        "^[a-z]）\\s*$"
       ],
       "bulletMarkers": [
         "^[•\\-\\*]\\s*$",
@@ -358,12 +347,17 @@
   "fileManagement": {
     "outputDirectory": "./output",
     "markdownDirectory": "./markdown",
-    "logDirectory": "./logs",
     "tempDirectory": "./temp",
+    "imageDirectory": "./images",
     "createDirectories": true,
     "overwriteExisting": false,
     "preserveOriginalNames": true,
-    "fileNamingStrategy": "timestamped"
+    "fileNamingStrategy": "timestamped",
+    "filenamePattern": "{filename}.md",
+    "addTableOfContents": true,
+    "useATXHeaders": true,
+    "preserveFormatting": true,
+    "listMarkerStyle": "-"
   },
   "logging": {
     "enabled": true,

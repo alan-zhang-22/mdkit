@@ -24,6 +24,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     private let logger: Logger
     private let markdownGenerator: MarkdownGenerator
     private let languageDetector: LanguageDetector
+    private let headerAndListDetector: HeaderAndListDetector
     
     // Track current PDF processing context for language detection
     private var currentPDFURL: URL?
@@ -34,10 +35,11 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     
     // MARK: - Initialization
     
-    public init(configuration: MDKitConfig, markdownGenerator: MarkdownGenerator, languageDetector: LanguageDetector) {
+    public init(configuration: MDKitConfig, markdownGenerator: MarkdownGenerator, languageDetector: LanguageDetector, headerAndListDetector: HeaderAndListDetector) {
         self.configuration = configuration
         self.markdownGenerator = markdownGenerator
         self.languageDetector = languageDetector
+        self.headerAndListDetector = headerAndListDetector
         self.logger = Logger(label: "TraditionalOCRDocumentProcessor")
     }
     
@@ -170,7 +172,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         let elements = try convertObservationsToElements(observations, pageNumber: pageNumber)
         
         // Post-process elements
-        let processedElements = try postProcessElements(elements)
+        let processedElements = try await postProcessElements(elements)
         
         logger.info("Document processing completed, generated \(processedElements.count) elements")
         return processedElements
@@ -303,10 +305,17 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         return languageWithConfidence
     }
     
-    public func mergeSplitElements(_ elements: [DocumentElement], language: String) throws -> [DocumentElement] {
+    public func mergeSplitElements(_ elements: [DocumentElement], language: String) async throws -> [DocumentElement] {
         logger.info("Merging split elements for language: \(language)")
         
-        let sortedElements = sortElementsByPosition(elements)
+        // PHASE 1: Same-line merging (merge elements on the same line horizontally)
+        let elementsWithSameLineMerged = await headerAndListDetector.mergeSameLineElements(elements)
+        
+        // PHASE 2: Conservative split sentence merging (merge incomplete sentences across lines)
+        let elementsWithSentencesMerged = await headerAndListDetector.mergeSplitSentencesConservative(elementsWithSameLineMerged)
+        
+        // Then apply the traditional proximity-based merging for other elements
+        let sortedElements = sortElementsByPosition(elementsWithSentencesMerged)
         var mergedElements: [DocumentElement] = []
         var currentElement: DocumentElement?
         
@@ -414,15 +423,62 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     private func convertObservationsToElements(_ observations: [VNRecognizedTextObservation], pageNumber: Int) throws -> [DocumentElement] {
         var elements: [DocumentElement] = []
         
-        for observation in observations {
-            guard let topCandidate = observation.topCandidates(1).first else { continue }
+        logger.info("=== ORIGINAL OCR OBSERVATIONS (PAGE \(pageNumber)) ===")
+        logger.info("Total observations: \(observations.count)")
+        
+        // Sort observations by Y-coordinate (top to bottom) for logical reading order
+        let sortedObservations = observations.sorted { obs1, obs2 in
+            // Use the top edge (minY) for sorting, with smaller Y values first (top of page)
+            return obs1.boundingBox.minY > obs2.boundingBox.minY
+        }
+        
+        logger.info("Observations sorted by Y-coordinate (top to bottom)")
+        
+        for (index, observation) in sortedObservations.enumerated() {
+            guard let topCandidate = observation.topCandidates(1).first else { 
+                logger.warning("   Observation \(index): No top candidate found, skipping")
+                continue 
+            }
             
             let text = topCandidate.string
             let confidence = topCandidate.confidence
             let boundingBox = observation.boundingBox
             
-            // Determine element type based on content and position
-            let elementType = determineElementType(text: text, boundingBox: boundingBox, confidence: confidence)
+            // Log detailed information about each observation
+            logger.info("   📝 Observation \(index):")
+            logger.info("      📄 Page: \(pageNumber)")
+            logger.info("      📍 Region: (\(String(format: "%.6f", boundingBox.minY)), \(String(format: "%.6f", boundingBox.minX)), \(String(format: "%.6f", boundingBox.height)), \(String(format: "%.6f", boundingBox.width)))")
+            logger.info("      📍 Coordinates: X=[\(String(format: "%.6f", boundingBox.minX))-\(String(format: "%.6f", boundingBox.maxX))], Y=[\(String(format: "%.6f", boundingBox.minY))-\(String(format: "%.6f", boundingBox.maxY))]")
+            logger.info("      📝 Text: '\(text)'")
+            logger.info("      📏 Length: \(text.count) characters")
+            logger.info("      🎯 Confidence: \(String(format: "%.3f", confidence))")
+            
+            // Use HeaderAndListDetector for proper element type detection
+            let elementType: DocumentElementType
+            if headerAndListDetector.detectHeader(in: DocumentElement(
+                type: .paragraph,
+                boundingBox: boundingBox,
+                contentData: Data(),
+                confidence: confidence,
+                pageNumber: pageNumber,
+                text: text,
+                metadata: [:]
+            )).isHeader {
+                elementType = .header
+            } else if headerAndListDetector.detectListItem(in: DocumentElement(
+                type: .paragraph,
+                boundingBox: boundingBox,
+                contentData: Data(),
+                confidence: confidence,
+                pageNumber: pageNumber,
+                text: text,
+                metadata: [:]
+            )).isListItem {
+                elementType = .listItem
+            } else {
+                elementType = .paragraph
+            }
+            logger.info("      🏷️ Detected Type: \(elementType)")
             
             let element = DocumentElement(
                 id: UUID(),
@@ -439,52 +495,26 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             )
             
             elements.append(element)
+            logger.info("      ✅ Element created with ID: \(element.id)")
         }
+        
+        logger.info("=== OCR OBSERVATIONS CONVERSION COMPLETE ===")
+        logger.info("Successfully converted \(elements.count) observations to DocumentElements")
+        logger.info("===============================================")
         
         return elements
     }
     
-    private func determineElementType(text: String, boundingBox: CGRect, confidence: Float) -> DocumentElementType {
-        let normalizedY = boundingBox.minY
-        let textLength = text.count
-        
-        // Title detection (high position, short text, high confidence)
-        if normalizedY > 0.85 && textLength < 50 && confidence > 0.8 {
-            return .title
-        }
-        
-        // Heading detection (high position, medium text, contains numbers)
-        if normalizedY > 0.7 && (text.contains(".") || text.contains("：")) && textLength < 100 {
-            return .header
-        }
-        
-        // List item detection
-        if text.hasPrefix("a）") || text.hasPrefix("b）") || text.hasPrefix("c）") || text.hasPrefix("d）") {
-            return .listItem
-        }
-        
-        // Footer detection (low position)
-        if normalizedY < 0.1 {
-            return .footer
-        }
-        
-        // Header detection (very high position)
-        if normalizedY > 0.9 {
-            return .header
-        }
-        
-        // Default to paragraph
-        return .paragraph
-    }
+
     
-    private func postProcessElements(_ elements: [DocumentElement]) throws -> [DocumentElement] {
+    private func postProcessElements(_ elements: [DocumentElement]) async throws -> [DocumentElement] {
         var processedElements = elements
         
         // Detect language
         let language = try detectLanguage(from: processedElements)
         
         // Merge split elements
-        processedElements = try mergeSplitElements(processedElements, language: language)
+        processedElements = try await mergeSplitElements(processedElements, language: language)
         
         // Remove duplicates
         let deduplicationResult = try removeDuplicates(from: processedElements)
@@ -497,9 +527,9 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     }
     
     private func shouldMergeElements(_ element1: DocumentElement, _ element2: DocumentElement, language: String) -> Bool {
-        // Check if elements are close vertically
+        // Check if elements are close vertically - use stricter 1% threshold to preserve list items
         let verticalDistance = abs(element1.boundingBox.minY - element2.boundingBox.minY)
-        if verticalDistance > 0.05 { // 5% threshold
+        if verticalDistance > 0.01 { // 1% threshold (much stricter than previous 5%)
             return false
         }
         
@@ -507,6 +537,34 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         let horizontalDistance = abs(element1.boundingBox.maxX - element2.boundingBox.minX)
         if horizontalDistance > 0.1 { // 10% threshold
             return false
+        }
+        
+        // Additional check: if either element is a list item, be very conservative about merging
+        if let text1 = element1.text, let text2 = element2.text {
+            let normalizedText1 = text1.trimmingCharacters(in: .whitespacesAndNewlines)
+            let normalizedText2 = text2.trimmingCharacters(in: .whitespacesAndNewlines)
+            
+            // Don't merge if either text starts with a list item marker
+            if normalizedText1.hasPrefix("a）") || normalizedText1.hasPrefix("b）") || normalizedText1.hasPrefix("c）") ||
+               normalizedText1.hasPrefix("d）") || normalizedText1.hasPrefix("e）") || normalizedText1.hasPrefix("f）") ||
+               normalizedText1.hasPrefix("g）") || normalizedText1.hasPrefix("h）") || normalizedText1.hasPrefix("i）") ||
+               normalizedText1.hasPrefix("j）") || normalizedText1.hasPrefix("k）") || normalizedText1.hasPrefix("l）") ||
+               normalizedText1.hasPrefix("m）") || normalizedText1.hasPrefix("n）") || normalizedText1.hasPrefix("o）") ||
+               normalizedText1.hasPrefix("p）") || normalizedText1.hasPrefix("q）") || normalizedText1.hasPrefix("r）") ||
+               normalizedText1.hasPrefix("s）") || normalizedText1.hasPrefix("t）") || normalizedText1.hasPrefix("u）") ||
+               normalizedText1.hasPrefix("v）") || normalizedText1.hasPrefix("w）") || normalizedText1.hasPrefix("x）") ||
+               normalizedText1.hasPrefix("y）") || normalizedText1.hasPrefix("z）") ||
+               normalizedText2.hasPrefix("a）") || normalizedText2.hasPrefix("b）") || normalizedText2.hasPrefix("c）") ||
+               normalizedText2.hasPrefix("d）") || normalizedText2.hasPrefix("e）") || normalizedText2.hasPrefix("f）") ||
+               normalizedText2.hasPrefix("g）") || normalizedText2.hasPrefix("h）") || normalizedText2.hasPrefix("i）") ||
+               normalizedText2.hasPrefix("j）") || normalizedText2.hasPrefix("k）") || normalizedText2.hasPrefix("l）") ||
+               normalizedText2.hasPrefix("m）") || normalizedText2.hasPrefix("n）") || normalizedText2.hasPrefix("o）") ||
+               normalizedText2.hasPrefix("p）") || normalizedText2.hasPrefix("q）") || normalizedText2.hasPrefix("r）") ||
+               normalizedText2.hasPrefix("s）") || normalizedText2.hasPrefix("t）") || normalizedText2.hasPrefix("u）") ||
+               normalizedText2.hasPrefix("v）") || normalizedText2.hasPrefix("w）") || normalizedText2.hasPrefix("x）") ||
+               normalizedText2.hasPrefix("y）") || normalizedText2.hasPrefix("z）") {
+                return false
+            }
         }
         
         // Check if text content suggests they should be merged

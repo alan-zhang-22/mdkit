@@ -185,7 +185,7 @@ public protocol DocumentProcessing {
     /// - Parameter language: The detected document language for better merging
     /// - Returns: An array of merged elements
     /// - Throws: An error if merging fails
-    func mergeSplitElements(_ elements: [DocumentElement], language: String) throws -> [DocumentElement]
+    func mergeSplitElements(_ elements: [DocumentElement], language: String) async throws -> [DocumentElement]
     
     /// Detects and removes duplicate elements
     /// - Parameter elements: The document elements to deduplicate

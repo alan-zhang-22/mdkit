@@ -154,7 +154,7 @@ public final class OutputGenerator: OutputGenerating {
         }
         
         // Add table of contents
-        if config.output.markdown.addTableOfContents {
+        if config.fileManagement.addTableOfContents {
             output += generateTableOfContents(from: filteredElements)
         }
         
@@ -288,7 +288,7 @@ public final class OutputGenerator: OutputGenerating {
         output += "- Content is organized for optimal token efficiency\n\n"
         
         // Add table of contents
-        if config.output.markdown.addTableOfContents {
+        if config.fileManagement.addTableOfContents {
             output += generateTableOfContents(from: filteredElements)
         }
         
@@ -300,138 +300,21 @@ public final class OutputGenerator: OutputGenerating {
     
     /// Filter out common headers and footers based on configuration
     private func filterOutCommonHeadersAndFooters(_ elements: [DocumentElement]) -> [DocumentElement] {
-        guard config.headerFooterDetection.smartDetection.enabled else {
-            return elements
-        }
-        
-        logger.info("🔍 Starting header/footer filtering for \(elements.count) elements")
-        logger.info("📋 Excluded patterns: \(config.headerFooterDetection.smartDetection.excludeCommonHeaders)")
-        
-        var filteredElements: [DocumentElement] = []
-        var filteredCount = 0
-        
-        for (index, element) in elements.enumerated() {
-            guard let text = element.text, !text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty else {
-                logger.debug("⏭️ Skipping element \(index): no text content")
-                continue
-            }
-            
-            let trimmedText = text.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-            
-            // Debug: Log each element being processed
-            logger.info("🔍 Processing element \(index):")
-            logger.info("   📍 Region: (\(element.boundingBox.minX), \(element.boundingBox.minY), \(element.boundingBox.width), \(element.boundingBox.height))")
-            logger.info("   📄 Page: \(element.pageNumber)")
-            logger.info("   🏷️ Type: \(element.type)")
-            logger.info("   📝 Text: '\(trimmedText)'")
-            
-            // Check if this element should be excluded based on common headers
-            var exclusionReason: String? = nil
-            let shouldExclude = config.headerFooterDetection.smartDetection.excludeCommonHeaders.contains { headerPattern in
-                // Check if the text is primarily the excluded header
-                let normalizedText = trimmedText.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                let normalizedPattern = headerPattern.lowercased().trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
-                
-                // Exact match or if the text is very similar to the pattern (allowing for minor variations)
-                if normalizedText == normalizedPattern {
-                    exclusionReason = "Exact match with pattern: '\(headerPattern)'"
-                    return true
-                }
-                
-                // If the text is much longer than the pattern, it's likely content, not a header
-                if normalizedText.count > normalizedPattern.count * 2 {
-                    return false
-                }
-                
-                // Check if the pattern is a significant part of the text (more than 80% similarity)
-                let similarity = calculateTextSimilarity(normalizedText, normalizedPattern)
-                if similarity > 0.8 {
-                    exclusionReason = "High similarity (\(String(format: "%.2f", similarity))) with pattern: '\(headerPattern)'"
-                    return true
-                }
-                
-                return false
-            }
-            
-            if !shouldExclude {
-                filteredElements.append(element)
-                logger.info("   ✅ KEPT: Element preserved")
-            } else {
-                filteredCount += 1
-                logger.warning("   ❌ FILTERED OUT: \(exclusionReason ?? "Unknown reason")")
-            }
-        }
-        
-        logger.info("🎯 Header/footer filtering complete: \(elements.count) → \(filteredElements.count) elements (\(filteredCount) filtered out)")
-        
-        // Apply region-based filtering using pageHeaderRegion and pageFooterRegion
-        let finalFilteredElements = filterOutElementsByRegion(filteredElements)
-        
-        return finalFilteredElements
+        // Header/footer filtering is now handled by TraditionalOCRDocumentProcessor during processing
+        // This method is kept for backward compatibility but simply returns the elements as-is
+        logger.debug("Header/footer filtering skipped - already processed by TraditionalOCRDocumentProcessor")
+        return elements
     }
     
     /// Filter out elements based on their position in header and footer regions
     private func filterOutElementsByRegion(_ elements: [DocumentElement]) -> [DocumentElement] {
-        guard config.processing.enableHeaderFooterDetection else {
-            return elements
-        }
-        
-        let headerRegion = config.processing.pageHeaderRegion
-        let footerRegion = config.processing.pageFooterRegion
-        
-        logger.info("🗺️ Starting region-based filtering:")
-        logger.info("   📍 Header region: Y=[\(headerRegion[0]), \(headerRegion[1])]")
-        logger.info("   📍 Footer region: Y=[\(footerRegion[0]), \(footerRegion[1])]")
-        
-        var filteredElements: [DocumentElement] = []
-        var filteredCount = 0
-        
-        for element in elements {
-            let elementY = element.boundingBox.minY
-            let elementHeight = element.boundingBox.height
-            let elementBottom = elementY + elementHeight
-            
-            // Check if element is in header region (top of page)
-            let isInHeaderRegion = elementY >= headerRegion[0] && elementY <= headerRegion[1]
-            
-            // Check if element is in footer region (bottom of page)
-            let isInFooterRegion = elementBottom >= footerRegion[0] && elementBottom <= footerRegion[1]
-            
-            if isInHeaderRegion || isInFooterRegion {
-                filteredCount += 1
-                let regionType = isInHeaderRegion ? "header" : "footer"
-                logger.debug("🗺️ Filtered out \(regionType) element: '\(element.text ?? "no text")' at Y=\(elementY)")
-            } else {
-                filteredElements.append(element)
-            }
-        }
-        
-        logger.info("🗺️ Region-based filtering complete: \(elements.count) → \(filteredElements.count) elements (\(filteredCount) filtered out)")
-        return filteredElements
+        // Region-based filtering is now handled by TraditionalOCRDocumentProcessor during processing
+        // This method is kept for backward compatibility but simply returns the elements as-is
+        logger.debug("Region-based filtering skipped - already processed by TraditionalOCRDocumentProcessor")
+        return elements
     }
     
-    /// Calculate similarity between two strings using Levenshtein distance
-    private func calculateTextSimilarity(_ text1: String, _ text2: String) -> Double {
-        let distance = levenshteinDistance(text1, text2)
-        let maxLength = max(text1.count, text2.count)
-        if maxLength == 0 { return 1.0 }
-        return 1.0 - (Double(distance) / Double(maxLength))
-    }
-    
-    /// Calculate Levenshtein distance between two strings
-    private func levenshteinDistance(_ s1: String, _ s2: String) -> Int {
-        let empty = Array(repeating: 0, count: s2.count + 1)
-        var last = Array(0...s2.count)
-        
-        for (i, char1) in s1.enumerated() {
-            var current = [i + 1] + empty
-            for (j, char2) in s2.enumerated() {
-                current[j + 1] = char1 == char2 ? last[j] : min(last[j], last[j + 1], current[j]) + 1
-            }
-            last = current
-        }
-        return last[s2.count]
-    }
+
     
     private func optimizeTextForLLM(_ text: String, elementType: DocumentElementType) -> String {
         var optimized = text
