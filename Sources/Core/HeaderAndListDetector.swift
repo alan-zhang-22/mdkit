@@ -99,6 +99,78 @@ public class HeaderAndListDetector {
         return HeaderDetectionResult(isHeader: false)
     }
     
+    /// Detects if a page is a TOC page based on its content characteristics
+    public func isTOCPage(_ elements: [DocumentElement]) -> Bool {
+        guard !elements.isEmpty else { return false }
+        
+        // TOC pages typically have:
+        // 1. High ratio of headers to other content
+        // 2. Short text elements (mostly titles/headers)
+        // 3. Many elements with TOC-like patterns
+        // 4. Few or no substantial paragraphs
+        
+        let headerCount = elements.filter { $0.type == .header }.count
+        let totalElements = elements.count
+        
+        // Calculate header ratio
+        let headerRatio = Float(headerCount) / Float(totalElements)
+        
+        // Check if most elements are headers (typical for TOC pages)
+        if headerRatio >= 0.9 && totalElements >= 3 {
+            logger.debug("Page identified as TOC page: header ratio \(headerRatio) (\(headerCount)/\(totalElements))")
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Detects if an element is a TOC item based on content patterns
+    /// This should only be called for elements on pages that are confirmed TOC pages
+    public func detectTOCItem(in element: DocumentElement) -> Bool {
+        guard let text = element.text, !text.isEmpty else {
+            return false
+        }
+        
+        // TOC items typically:
+        // 1. Start with numbers or letters followed by dots/spaces
+        // 2. End with page numbers or ellipsis
+        // 3. Are relatively short
+        // 4. Don't contain sentence-ending punctuation
+        
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Check if it's short (TOC items are typically brief)
+        guard trimmedText.count <= 50 else { return false }
+        
+        // Check for TOC patterns
+        let tocPatterns = [
+            "^\\d+\\s+[\\u4e00-\\u9fff]+", // "1 范围", "2 规范性引用文件"
+            "^\\d+\\.\\d+\\s+[\\u4e00-\\u9fff]+", // "5.1 等级保护对象"
+            "^\\d+\\.\\d+\\.\\d+\\s+[\\u4e00-\\u9fff]+", // "6.1.1 安全物理环境"
+            "^附录[A-Z]\\s*[（(][^）)]+[）)]", // "附录A（规范性附录）"
+            "^[\\u4e00-\\u9fff]+\\s*\\d+$", // "前言 1", "参考文献 83"
+        ]
+        
+        for pattern in tocPatterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
+            }
+        }
+        
+        // Check for TOC indicators (page numbers, ellipsis)
+        let tocIndicators = ["⋯", "…", "•", "：", "："]
+        let hasTOCIndicator = tocIndicators.contains { trimmedText.contains($0) }
+        
+        // Check if it doesn't end with sentence punctuation (TOC items don't end sentences)
+        let sentenceEndings = ["。", "！", "？", ".", "!", "?", ";", "；"]
+        let endsWithSentence = sentenceEndings.contains { trimmedText.hasSuffix($0) }
+        
+        return hasTOCIndicator && !endsWithSentence
+    }
+    
     /// Detects header patterns in text using configuration-driven patterns
     private func detectHeaderPattern(in text: String) -> HeaderDetectionResult {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -881,32 +953,53 @@ public class HeaderAndListDetector {
         return true
     }
     
-    /// Checks if an element is a header (complete statement without ending punctuation)
+    /// Checks if an element is a header using configuration-based patterns
     private func isHeader(_ element: DocumentElement) -> Bool {
         guard let text = element.text else { return false }
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Headers typically:
-        // 1. Are short (usually < 20 characters)
-        // 2. Start with section numbers like "8.1.4.3"
-        // 3. Contain header keywords
-        // 4. Don't end with punctuation
-        
-        // Check if it's a section header (starts with number pattern)
-        let sectionHeaderPattern = try? NSRegularExpression(pattern: "^\\d+\\.\\d+\\.\\d+")
-        if let pattern = sectionHeaderPattern {
-            let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
-            if pattern.firstMatch(in: trimmedText, range: range) != nil {
-                return true
+        // Use configuration-based header detection patterns
+        // Check numbered headers (e.g., "1 范围", "2 规范性引用文件", "8.1.4.3")
+        for pattern in config.headerDetection.patterns.numberedHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
             }
         }
         
-        // Check if it's short and contains header-like content
-        let isShort = trimmedText.count <= 20
-        let headerKeywords = ["安全审计", "访问控制", "入侵防范", "恶意代码防范", "可信验证", "数据完整性", "数据保密性", "数据备份恢复", "剩余信息保护", "个人信息保护", "安全管理中心", "系统管理", "审计管理"]
-        let containsHeaderKeyword = headerKeywords.contains { trimmedText.contains($0) }
+        // Check lettered headers (e.g., "A.1", "甲", "乙")
+        for pattern in config.headerDetection.patterns.letteredHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
+            }
+        }
         
-        return isShort && containsHeaderKeyword
+        // Check Roman numeral headers (e.g., "I", "II", "一", "二")
+        for pattern in config.headerDetection.patterns.romanHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
+            }
+        }
+        
+        // Check named headers (e.g., "Chapter 1", "附录 A", "第1章")
+        for pattern in config.headerDetection.patterns.namedHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
+            }
+        }
+        
+        return false
     }
     
     /// Checks if next element is a safe sentence continuation
@@ -933,21 +1026,36 @@ public class HeaderAndListDetector {
         let trimmedNextText = nextText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // DANGEROUS: Don't merge if next element starts with list markers
-        let listItemMarkers = ["a）", "b）", "c）", "d）", "e）", "f）", "g）", "h）", "i）", "j）", "k）", "l）", "m）", "n）", "o）", "p）", "q）", "r）", "s）", "t）", "u）", "v）", "w）", "x）", "y）", "z）", "A）", "B）", "C）", "D）", "E）", "F）", "G）", "H）", "I）", "J）", "K）", "L）", "M）", "N）", "O）", "P）", "Q）", "R）", "S）", "T）", "U）", "V）", "W）", "X）", "Y）", "Z）"]
+        // Use configuration-based list detection patterns
+        for pattern in config.listDetection.patterns.numberedMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
+                if regex.firstMatch(in: trimmedNextText, range: range) != nil {
+                    logger.debug("❌ Next element starts with numbered list marker: '\(trimmedNextText)'")
+                    return false // This is a NEW list item, not a continuation
+                }
+            }
+        }
         
-        for marker in listItemMarkers {
-            if trimmedNextText.hasPrefix(marker) {
-                logger.debug("❌ Next element starts with list marker: '\(marker)'")
-                return false // This is a NEW list item, not a continuation
+        for pattern in config.listDetection.patterns.letteredMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
+                if regex.firstMatch(in: trimmedNextText, range: range) != nil {
+                    logger.debug("❌ Next element starts with lettered list marker: '\(trimmedNextText)'")
+                    return false // This is a NEW list item, not a continuation
+                }
             }
         }
         
         // DANGEROUS: Don't merge if next element starts with header markers
-        let headerMarkers = ["8.1.4.", "8.1.4.", "8.1.5.", "8.1.6.", "8.1.7.", "8.1.8.", "8.1.9.", "8.1.10.", "8.1.11."]
-        for marker in headerMarkers {
-            if trimmedNextText.hasPrefix(marker) {
-                logger.debug("❌ Next element starts with header marker: '\(marker)'")
-                return false // This is a NEW header, not a continuation
+        // Use configuration-based header detection patterns
+        for pattern in config.headerDetection.patterns.numberedHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
+                if regex.firstMatch(in: trimmedNextText, range: range) != nil {
+                    logger.debug("❌ Next element starts with header marker: '\(trimmedNextText)'")
+                    return false // This is a NEW header, not a continuation
+                }
             }
         }
         
@@ -1011,16 +1119,30 @@ public class HeaderAndListDetector {
     private func startsWithDangerousPattern(_ text: String) -> Bool {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Only the most dangerous patterns that clearly indicate new content, not continuation
-        // These are patterns that almost always start a new requirement or section
-        let dangerousPatterns = [
-            "a）", "b）", "c）", "d）", "e）", "f）", "g）", "h）", "i）", "j）", "k）", "l）", "m）", "n）", "o）", "p）", "q）", "r）", "s）", "t）", "u）", "v）", "w）", "x）", "y）", "z）",
-            "8.1.4.", "8.1.5.", "8.1.6.", "8.1.7.", "8.1.8.", "8.1.9.", "8.1.10.", "8.1.11.",
-            "本项要求包括："
-        ]
+        // Check for list item markers that indicate new content
+        for pattern in config.listDetection.patterns.letteredMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
+            }
+        }
         
-        for pattern in dangerousPatterns {
-            if trimmedText.hasPrefix(pattern) {
+        // Check for header markers that indicate new content
+        for pattern in config.headerDetection.patterns.numberedHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return true
+                }
+            }
+        }
+        
+        // Check for specific phrases that introduce new lists
+        let dangerousPhrases = ["本项要求包括："]
+        for phrase in dangerousPhrases {
+            if trimmedText.hasPrefix(phrase) {
                 return true
             }
         }
@@ -1100,12 +1222,13 @@ public class HeaderAndListDetector {
         let trimmedText = continuationText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // List item markers that indicate a NEW list item (not continuation)
-        let listItemMarkers = ["a）", "b）", "c）", "d）", "e）", "f）", "g）", "h）", "i）", "j）", "k）", "l）", "m）", "n）", "o）", "p）", "q）", "r）", "s）", "t）", "u）", "v）", "w）", "x）", "y）", "z）", "A）", "B）", "C）", "D）", "E）", "F）", "G）", "H）", "I）", "J）", "K）", "L）", "M）", "N）", "O）", "P）", "Q）", "R）", "S）", "T）", "U）", "V）", "W）", "X）", "Y）", "Z）"]
-        
-        // If continuation starts with a list item marker, it's a NEW item, not continuation
-        for marker in listItemMarkers {
-            if trimmedText.hasPrefix(marker) {
-                return false // This is a NEW list item, not a continuation
+        // Use configuration-based list detection patterns
+        for pattern in config.listDetection.patterns.letteredMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    return false // This is a NEW list item, not a continuation
+                }
             }
         }
         

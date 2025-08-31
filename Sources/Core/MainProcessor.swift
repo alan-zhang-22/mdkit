@@ -127,11 +127,12 @@ public class MainProcessor {
                 parsedPageRange = nil
             }
             
-            // Process the PDF - TraditionalOCRDocumentProcessor returns elements directly
-            let elements = try await documentProcessor.processDocument(at: inputPath, pageRange: parsedPageRange)
+            // Process the PDF - TraditionalOCRDocumentProcessor returns DocumentProcessingResult
+            let processingResult = try await documentProcessor.processDocument(at: inputPath, pageRange: parsedPageRange)
+            let elements = processingResult.elements
             
             // Step 3: Generate all output types from the returned elements
-            let allOutputs = try generateAllOutputTypes(from: elements)
+            let allOutputs = try generateAllOutputTypes(from: elements, inputPath: inputPath, processingResult: processingResult)
             
             // Step 4: Write all output types
             let finalOutputPaths = try writeAllOutputs(
@@ -252,8 +253,11 @@ public class MainProcessor {
         }
     }
     
+    // MARK: - Deprecated Methods (No longer used)
+    
     /// Generate markdown from document elements
-    private func generateMarkdown(from elements: [DocumentElement]) throws -> String {
+    /// This method is deprecated and no longer used. Markdown generation is now handled by MarkdownGenerator.
+    private func generateMarkdown(from elements: [DocumentElement], inputPath: String) throws -> String {
         logger.info("Generating markdown from \(elements.count) elements")
         
         // Detect document language for language-aware processing
@@ -263,7 +267,8 @@ public class MainProcessor {
         logger.info("Detected document language: \(detectedLanguage)")
         
         // Generate markdown using the markdown generator
-        let markdown = try markdownGenerator.generateMarkdown(from: elements)
+        let inputFilename = URL(fileURLWithPath: inputPath).lastPathComponent
+        let markdown = try markdownGenerator.generateMarkdown(from: elements, inputFilename: inputFilename)
         
         // Add language metadata to the markdown
         let languageHeader = "\n\n---\n*Document Language: \(detectedLanguage)*\n---\n\n"
@@ -272,7 +277,7 @@ public class MainProcessor {
     }
     
     /// Generate all output types from document elements
-    private func generateAllOutputTypes(from elements: [DocumentElement]) throws -> [OutputType: String] {
+    private func generateAllOutputTypes(from elements: [DocumentElement], inputPath: String, processingResult: DocumentProcessingResult) throws -> [OutputType: String] {
         guard !elements.isEmpty else {
             throw MainProcessorError.noElementsToProcess
         }
@@ -288,7 +293,8 @@ public class MainProcessor {
                 
                 // Use MarkdownGenerator for markdown output, OutputGenerator for others
                 if outputType == .markdown {
-                    output = try markdownGenerator.generateMarkdown(from: elements)
+                    let inputFilename = URL(fileURLWithPath: inputPath).lastPathComponent
+                    output = try markdownGenerator.generateMarkdown(from: elements, inputFilename: inputFilename, blankPages: processingResult.blankPages, totalPagesProcessed: processingResult.totalPagesProcessed, totalPagesRequested: processingResult.totalPagesRequested)
                     logger.info("Generated markdown using MarkdownGenerator")
                 } else {
                     output = try outputGenerator.generateOutput(from: elements, outputType: outputType)

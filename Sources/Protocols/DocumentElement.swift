@@ -105,6 +105,9 @@ public enum DocumentElementType: String, CaseIterable, Codable, Sendable {
     /// Page number
     case pageNumber = "pageNumber"
     
+    /// Table of contents item
+    case tocItem = "tocItem"
+    
     /// Unknown or unclassified element
     case unknown = "unknown"
     
@@ -123,6 +126,7 @@ public enum DocumentElementType: String, CaseIterable, Codable, Sendable {
         case .image: return "Image"
         case .footnote: return "Footnote"
         case .pageNumber: return "Page Number"
+        case .tocItem: return "TOC Item"
         case .unknown: return "Unknown"
         }
     }
@@ -130,7 +134,7 @@ public enum DocumentElementType: String, CaseIterable, Codable, Sendable {
     /// Whether this element type contains text content
     public var isTextBased: Bool {
         switch self {
-        case .title, .textBlock, .paragraph, .header, .footer, .listItem, .footnote, .pageNumber:
+        case .title, .textBlock, .paragraph, .header, .footer, .listItem, .footnote, .pageNumber, .tocItem:
             return true
         case .table, .list, .barcode, .image, .unknown:
             return false
@@ -142,7 +146,7 @@ public enum DocumentElementType: String, CaseIterable, Codable, Sendable {
         switch self {
         case .textBlock, .paragraph, .listItem:
             return true
-        case .title, .header, .footer, .table, .list, .barcode, .image, .footnote, .pageNumber, .unknown:
+        case .title, .header, .footer, .table, .list, .barcode, .image, .footnote, .pageNumber, .tocItem, .unknown:
             return false
         }
     }

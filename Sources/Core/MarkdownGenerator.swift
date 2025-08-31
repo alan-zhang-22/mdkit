@@ -56,22 +56,42 @@ public final class MarkdownGenerator: Sendable {
     // MARK: - Public Interface
     
     /// Generate markdown from an array of document elements
-    /// - Parameter elements: Array of processed document elements
+    /// - Parameters:
+    ///   - elements: Array of processed document elements
+    ///   - inputFilename: Original input filename for metadata
+    ///   - blankPages: Array of blank page numbers
+    ///   - totalPagesProcessed: Total number of pages with content
+    ///   - totalPagesRequested: Total number of pages requested
     /// - Returns: Generated markdown string
     /// - Throws: MarkdownGenerationError if generation fails
-    public func generateMarkdown(from elements: [DocumentElement]) throws -> String {
+    public func generateMarkdown(from elements: [DocumentElement], inputFilename: String? = nil, blankPages: [Int] = [], totalPagesProcessed: Int = 0, totalPagesRequested: Int = 0) throws -> String {
         guard !elements.isEmpty else {
             throw MarkdownGenerationError.noElementsToProcess
         }
         
         logger.info("Starting markdown generation for \(elements.count) elements")
         
-        // Add document header
+        // Extract meaningful title from first page elements
+        let meaningfulTitle = extractDocumentTitle(from: elements) ?? "Document Processing Results"
+        
+        // Add YAML front matter
         var markdownLines: [String] = []
-        markdownLines.append("# Document Processing Results")
-        markdownLines.append("")
-        markdownLines.append("Generated on: \(Date().formatted())")
-        markdownLines.append("Total elements: \(elements.count)")
+        markdownLines.append("---")
+        markdownLines.append("title: \(meaningfulTitle)")
+        if let inputFilename = inputFilename {
+            markdownLines.append("source_file: \(inputFilename)")
+        }
+        markdownLines.append("generated: \(Date().formatted())")
+        markdownLines.append("total_elements: \(elements.count)")
+        markdownLines.append("pages_processed: \(totalPagesProcessed)")
+        markdownLines.append("pages_requested: \(totalPagesRequested)")
+        if !blankPages.isEmpty {
+            markdownLines.append("blank_pages: [\(blankPages.map(String.init).joined(separator: ", "))]")
+        }
+        markdownLines.append("document_type: PDF")
+        markdownLines.append("processing_tool: MDKit")
+        markdownLines.append("version: 1.0")
+        markdownLines.append("---")
         markdownLines.append("")
         
         // Sort elements by page and position (top to bottom, left to right)
@@ -149,6 +169,9 @@ public final class MarkdownGenerator: Sendable {
         case .barcode:
             return generateBarcodeMarkdown(trimmedText, element: element)
             
+        case .tocItem:
+            return generateTOCItemMarkdown(trimmedText, element: element)
+            
         case .unknown:
             logger.warning("Unknown element type encountered, treating as paragraph: \(trimmedText)")
             return generateParagraphMarkdown(trimmedText, element: element)
@@ -159,7 +182,8 @@ public final class MarkdownGenerator: Sendable {
     
     /// Generate markdown for title elements
     private func generateTitleMarkdown(_ text: String, element: DocumentElement) -> String {
-        return "# \(text)"
+        let anchorId = generateAnchorId(from: text)
+        return "# \(text) {#\(anchorId)}"
     }
     
     /// Generate markdown for header elements with level calculation
@@ -175,7 +199,8 @@ public final class MarkdownGenerator: Sendable {
         }
         
         let prefix = String(repeating: "#", count: level)
-        return "\(prefix) \(text)"
+        let anchorId = generateAnchorId(from: text)
+        return "\(prefix) \(text) {#\(anchorId)}"
     }
     
     /// Generate markdown for paragraph and text block elements
@@ -225,6 +250,23 @@ public final class MarkdownGenerator: Sendable {
     /// Generate markdown for barcode elements
     private func generateBarcodeMarkdown(_ text: String, element: DocumentElement) -> String {
         return "`[Barcode: \(text)]`"
+    }
+    
+    /// Generate markdown for TOC item elements
+    private func generateTOCItemMarkdown(_ text: String, element: DocumentElement) -> String {
+        // Clean up the TOC text by removing page numbers and ellipsis
+        let cleanedText = text
+            .replacingOccurrences(of: "⋯", with: "")
+            .replacingOccurrences(of: "…", with: "")
+            .replacingOccurrences(of: "•", with: "")
+            .replacingOccurrences(of: "：", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Generate anchor ID for the TOC item
+        let anchorId = generateAnchorId(from: cleanedText)
+        
+        // Format as TOC list item with link
+        return "- [\(cleanedText)](#\(anchorId))"
     }
     
     // MARK: - Helper Methods
@@ -286,11 +328,65 @@ public final class MarkdownGenerator: Sendable {
             return text
         }
         
-        for (index, header) in headers.enumerated() {
-            toc += "\(index + 1). \(header)\n"
+        for header in headers {
+            let anchorId = generateAnchorId(from: header)
+            toc += "- [\(header)](#\(anchorId))\n"
         }
         
         return toc
+    }
+    
+    /// Generate anchor ID from header text (markdown-friendly)
+    private func generateAnchorId(from text: String) -> String {
+        // Remove special characters and replace spaces with hyphens
+        let cleaned = text
+            .replacingOccurrences(of: "•", with: "")
+            .replacingOccurrences(of: "⋯", with: "")
+            .replacingOccurrences(of: "…", with: "")
+            .replacingOccurrences(of: "：", with: "")
+            .replacingOccurrences(of: "：", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+            .lowercased()
+        
+        return cleaned
+    }
+    
+    /// Extract meaningful document title from the first page elements
+    private func extractDocumentTitle(from elements: [DocumentElement]) -> String? {
+        // Get elements from the first page
+        let firstPageElements = elements.filter { $0.pageNumber == 1 }
+        
+        // Look for title elements first
+        if let titleElement = firstPageElements.first(where: { $0.type == .title }),
+           let titleText = titleElement.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !titleText.isEmpty {
+            return titleText
+        }
+        
+        // Look for header elements on the first page (likely document title)
+        let headerElements = firstPageElements.filter { $0.type == .header }
+        
+        // Find the highest header (lowest Y position = top of page)
+        if let topHeader = headerElements.min(by: { $0.boundingBox.minY < $1.boundingBox.minY }),
+           let headerText = topHeader.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !headerText.isEmpty {
+            return headerText
+        }
+        
+        // Look for the first significant text element (likely document title)
+        let sortedFirstPageElements = firstPageElements.sorted { $0.boundingBox.minY < $1.boundingBox.minY }
+        
+        for element in sortedFirstPageElements {
+            if let text = element.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !text.isEmpty,
+               text.count > 5, // Avoid very short text
+               text.count < 100 { // Avoid very long text
+                return text
+            }
+        }
+        
+        return nil
     }
 }
 

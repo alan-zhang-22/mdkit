@@ -242,7 +242,9 @@
       "namedHeaders": [
         "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*",
         "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s",
-        "^第\\d+[章节]\\s"
+        "^第\\d+[章节]\\s",
+        "^(前言|引言|附录)[⋯…]*\\s*$",
+        "^(Preface|Introduction|Appendix)\\s*$"
       ]
     },
     "levelCalculation": {
@@ -278,7 +280,8 @@
         "^[a-z]-\\s",
         "^[甲乙丙丁戊己庚辛壬癸]\\s",
         "^[a-z]）\\s",
-        "^[a-z]）$"
+        "^[a-z]）$",
+        "^[a-z]）"
       ],
       "bulletMarkers": [
         "^[•\\-\\*]\\s",

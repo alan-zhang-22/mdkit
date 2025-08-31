@@ -8,6 +8,21 @@
 import Foundation
 import CoreGraphics
 
+/// Result of document processing including elements and metadata
+public struct DocumentProcessingResult {
+    public let elements: [DocumentElement]
+    public let blankPages: [Int]
+    public let totalPagesProcessed: Int
+    public let totalPagesRequested: Int
+    
+    public init(elements: [DocumentElement], blankPages: [Int], totalPagesProcessed: Int, totalPagesRequested: Int) {
+        self.elements = elements
+        self.blankPages = blankPages
+        self.totalPagesProcessed = totalPagesProcessed
+        self.totalPagesRequested = totalPagesRequested
+    }
+}
+
 // MARK: - Page Range Specification
 
 /// Represents a page range for document processing
@@ -140,15 +155,15 @@ public protocol DocumentProcessing {
     /// Processes a document and extracts its elements
     /// - Parameter documentPath: The path to the document to process
     /// - Parameter pageRange: Optional page range specification (e.g., "5", "5,7", "5-7", "all", "5+", "-7")
-    /// - Returns: An array of document elements
+    /// - Returns: Document processing result including elements and metadata
     /// - Throws: An error if processing fails
-    func processDocument(at documentPath: String, pageRange: PageRange?) async throws -> [DocumentElement]
+    func processDocument(at documentPath: String, pageRange: PageRange?) async throws -> DocumentProcessingResult
     
     /// Processes a document with default page range (all pages)
     /// - Parameter documentPath: The path to the document to process
-    /// - Returns: An array of document elements
+    /// - Returns: Document processing result including elements and metadata
     /// - Throws: An error if processing fails
-    func processDocument(at documentPath: String) async throws -> [DocumentElement]
+    func processDocument(at documentPath: String) async throws -> DocumentProcessingResult
     
     /// Processes a document from image data with page range support
     /// - Parameter imageData: The image data to process
@@ -206,10 +221,15 @@ public protocol DocumentProcessing {
     // MARK: - Output Generation
     
     /// Generates markdown from processed elements
-    /// - Parameter elements: The processed document elements
+    /// - Parameters:
+    ///   - elements: The processed document elements
+    ///   - inputFilename: Optional input filename for metadata
+    ///   - blankPages: Array of blank page numbers
+    ///   - totalPagesProcessed: Total number of pages with content
+    ///   - totalPagesRequested: Total number of pages requested
     /// - Returns: The generated markdown string
     /// - Throws: An error if markdown generation fails
-    func generateMarkdown(from elements: [DocumentElement]) throws -> String
+    func generateMarkdown(from elements: [DocumentElement], inputFilename: String?, blankPages: [Int], totalPagesProcessed: Int, totalPagesRequested: Int) throws -> String
     
     /// Generates a table of contents from document elements
     /// - Parameter elements: The document elements to analyze

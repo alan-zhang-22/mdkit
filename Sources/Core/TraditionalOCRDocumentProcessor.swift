@@ -45,7 +45,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     
     // MARK: - DocumentProcessing Implementation
     
-    public func processDocument(at documentPath: String, pageRange: PageRange?) async throws -> [DocumentElement] {
+    public func processDocument(at documentPath: String, pageRange: PageRange?) async throws -> DocumentProcessingResult {
         logger.info("Processing document at path: \(documentPath)")
         
         // Get document info first
@@ -107,7 +107,16 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         }
         
         logger.info("Successfully processed document with cross-page optimization, extracted \(allElements.count) elements")
-        return allElements
+        
+        // Post-process elements
+        let processedElements = try await postProcessElements(allElements)
+        
+        return DocumentProcessingResult(
+            elements: processedElements,
+            blankPages: [],
+            totalPagesProcessed: pagesToProcess.count,
+            totalPagesRequested: pagesToProcess.count
+        )
     }
     
     /// Get stored image data for a specific page
@@ -123,7 +132,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         return storedImageData
     }
     
-    public func processDocument(at documentPath: String) async throws -> [DocumentElement] {
+    public func processDocument(at documentPath: String) async throws -> DocumentProcessingResult {
         return try await processDocument(at: documentPath, pageRange: nil)
     }
     
@@ -341,8 +350,12 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         // PHASE 1: Same-line merging (merge elements on the same line horizontally)
         let elementsWithSameLineMerged = await headerAndListDetector.mergeSameLineElements(elements)
         
+        // EARLY TOC DETECTION: Analyze TOC pages right after same-line merge
+        let (tocProcessedElements, tocPages) = detectTOCPages(elementsWithSameLineMerged)
+        
         // PHASE 2: Conservative split sentence merging (merge incomplete sentences across lines)
-        let elementsWithSentencesMerged = await headerAndListDetector.mergeSplitSentencesConservative(elementsWithSameLineMerged)
+        // Skip multi-line merging for TOC pages to preserve their structure
+        let elementsWithSentencesMerged = await mergeSplitSentencesConditionally(tocProcessedElements, tocPages: tocPages)
         
         // Then apply the traditional proximity-based merging for other elements
         let sortedElements = sortElementsByPosition(elementsWithSentencesMerged)
@@ -410,14 +423,14 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         return sortElementsByPosition(elements)
     }
     
-    public func generateMarkdown(from elements: [DocumentElement]) throws -> String {
+    public func generateMarkdown(from elements: [DocumentElement], inputFilename: String? = nil, blankPages: [Int] = [], totalPagesProcessed: Int = 0, totalPagesRequested: Int = 0) throws -> String {
         logger.info("Generating markdown from \(elements.count) elements")
         
         // Sort elements by position before generating markdown
         let sortedElements = sortElementsByPosition(elements)
         
         // Delegate markdown generation to the MarkdownGenerator
-        let markdown = try markdownGenerator.generateMarkdown(from: sortedElements)
+        let markdown = try markdownGenerator.generateMarkdown(from: sortedElements, inputFilename: inputFilename, blankPages: blankPages, totalPagesProcessed: totalPagesProcessed, totalPagesRequested: totalPagesRequested)
         
         logger.info("Markdown generation completed")
         return markdown
@@ -915,5 +928,82 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         
         logger.info("Header/footer filtering completed: removed \(removedCount) observations, kept \(filteredObservations.count) observations")
         return filteredObservations
+    }
+    
+    // MARK: - TOC Detection and Conditional Merging
+    
+    /// Detect TOC pages and convert appropriate elements to TOC items
+    /// Returns: (processedElements, tocPageNumbers)
+    private func detectTOCPages(_ elements: [DocumentElement]) -> ([DocumentElement], Set<Int>) {
+        var processedElements = elements
+        var tocPages: Set<Int> = []
+        
+        // Group elements by page
+        let elementsByPage = Dictionary(grouping: processedElements) { $0.pageNumber }
+        
+        logger.info("=== TOC DETECTION ANALYSIS (AFTER SAME-LINE MERGE) ===")
+        logger.info("Total elements after same-line merge: \(elements.count)")
+        
+        for (pageNumber, pageElements) in elementsByPage {
+            logger.info("Page \(pageNumber): \(pageElements.count) elements after same-line merge")
+            
+            // Count headers on this page
+            let headerCount = pageElements.filter { $0.type == .header }.count
+            let totalElements = pageElements.count
+            let headerRatio = Float(headerCount) / Float(totalElements)
+            
+            logger.info("Page \(pageNumber): \(headerCount)/\(totalElements) headers (ratio: \(String(format: "%.1f", headerRatio * 100))%)")
+            
+            // Check if this page is a TOC page (Header Ratio ≥ 90%)
+            if headerRatio >= 0.9 && totalElements >= 3 {
+                logger.info("Page \(pageNumber) identified as TOC page - SKIPPING multi-line merge")
+                tocPages.insert(pageNumber)
+                
+                // Convert appropriate elements on this page to TOC items
+                for i in 0..<processedElements.count {
+                    if processedElements[i].pageNumber == pageNumber {
+                        // Check if this element should be a TOC item
+                        if headerAndListDetector.detectTOCItem(in: processedElements[i]) {
+                            // Convert to TOC item
+                            processedElements[i] = processedElements[i].updating(type: .tocItem)
+                            logger.debug("Converted element to TOC item: '\(processedElements[i].text ?? "")'")
+                        }
+                    }
+                }
+            } else {
+                logger.info("Page \(pageNumber) NOT identified as TOC page (header ratio < 90%) - WILL apply multi-line merge")
+            }
+        }
+        
+        logger.info("=== TOC DETECTION COMPLETED (BEFORE MULTI-LINE MERGE) ===")
+        logger.info("TOC pages (skipping multi-line merge): \(tocPages.sorted())")
+        return (processedElements, tocPages)
+    }
+    
+    /// Apply multi-line merging conditionally - skip TOC pages to preserve structure
+    private func mergeSplitSentencesConditionally(_ elements: [DocumentElement], tocPages: Set<Int>) async -> [DocumentElement] {
+        let processedElements = elements
+        
+        // Separate TOC and non-TOC elements
+        let tocElements = processedElements.filter { tocPages.contains($0.pageNumber) }
+        let nonTocElements = processedElements.filter { !tocPages.contains($0.pageNumber) }
+        
+        logger.info("=== MULTI-LINE MERGING ANALYSIS ===")
+        logger.info("TOC pages (preserving structure): \(tocPages.sorted())")
+        logger.info("TOC elements: \(tocElements.count)")
+        logger.info("Non-TOC elements (applying multi-line merge): \(nonTocElements.count)")
+        
+        if nonTocElements.isEmpty {
+            logger.info("No non-TOC elements to process - returning TOC elements as-is")
+            return tocElements
+        }
+        
+        // Apply multi-line merging only to non-TOC elements
+        let elementsWithSentencesMerged = await headerAndListDetector.mergeSplitSentencesConservative(nonTocElements)
+        
+        // Combine TOC elements (preserved) with merged non-TOC elements
+        let finalElements = tocElements + elementsWithSentencesMerged
+        logger.info("Conditional multi-line merging completed: \(elements.count) -> \(finalElements.count)")
+        return finalElements
     }
 }

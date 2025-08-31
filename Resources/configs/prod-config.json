@@ -245,7 +245,9 @@
       "namedHeaders": [
         "^(Chapter|Section|Part|章节|部分)\\s+\\d+(?:\\.\\d+)*\\s*$",
         "^(Appendix|附录)\\s+[A-Z](?:\\.\\d+)*\\s*$",
-        "^第\\d+[章节]\\s*$"
+        "^第\\d+[章节]\\s*$",
+        "^(前言|引言|附录)[⋯…]*\\s*$",
+        "^(Preface|Introduction|Appendix)\\s*$"
       ]
     },
     "levelCalculation": {
