@@ -57,9 +57,10 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         logger.info("Processing pages: \(pagesToProcess)")
         
         var allElements: [DocumentElement] = []
+        var previousPageElements: [DocumentElement]? = nil
         
-        // Process each page based on the page range
-        for pageNumber in pagesToProcess {
+        // Process each page with cross-page sentence optimization
+        for (index, pageNumber) in pagesToProcess.enumerated() {
             logger.info("Processing page \(pageNumber) of \(documentInfo.pageCount)")
             
             if documentInfo.format.lowercased() == "pdf" {
@@ -69,8 +70,28 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 
                 // Extract PDF page as image
                 let pageImageData = try await extractPDFPageAsImage(documentPath: documentPath, pageNumber: pageNumber)
-                let elements = try await processDocument(from: pageImageData, pageNumber: pageNumber, pageRange: pageRange)
-                allElements.append(contentsOf: elements)
+                let currentPageElements = try await processDocument(from: pageImageData, pageNumber: pageNumber, pageRange: pageRange)
+                
+                // NEW: Cross-page sentence optimization
+                if let previousElements = previousPageElements {
+                    logger.info("Applying cross-page sentence optimization between page \(pagesToProcess[index - 1]) and page \(pageNumber)")
+                    
+                    let (optimizedPreviousPage, optimizedCurrentPage) = try await headerAndListDetector.optimizeCrossPageSentences(
+                        currentPage: previousElements,
+                        nextPage: currentPageElements,
+                        currentPageNumber: pagesToProcess[index - 1],
+                        nextPageNumber: pageNumber
+                    )
+                    
+                    // Add optimized previous page elements
+                    allElements.append(contentsOf: optimizedPreviousPage)
+                    
+                    // Update current page elements for next iteration
+                    previousPageElements = optimizedCurrentPage
+                } else {
+                    // First page - no cross-page optimization needed
+                    previousPageElements = currentPageElements
+                }
             } else {
                 // For non-PDF documents, process as single image
                 let imageData = try Data(contentsOf: URL(fileURLWithPath: documentPath))
@@ -80,7 +101,12 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             }
         }
         
-        logger.info("Successfully processed document, extracted \(allElements.count) elements")
+        // Add the last page elements (which may have been optimized)
+        if let lastPageElements = previousPageElements {
+            allElements.append(contentsOf: lastPageElements)
+        }
+        
+        logger.info("Successfully processed document with cross-page optimization, extracted \(allElements.count) elements")
         return allElements
     }
     

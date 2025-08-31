@@ -911,18 +911,19 @@ public class HeaderAndListDetector {
     
     /// Checks if next element is a safe sentence continuation
     private func isSafeSentenceContinuation(_ current: DocumentElement, _ next: DocumentElement) -> Bool {
-        // Elements must be on the same page
-        guard current.pageNumber == next.pageNumber else { 
-            logger.debug("❌ Different pages: \(current.pageNumber) vs \(next.pageNumber)")
-            return false 
-        }
-        
-        // Check vertical distance (reasonable proximity)
-        let verticalDistance = abs(current.boundingBox.minY - next.boundingBox.minY)
-        let maxDistance: CGFloat = 0.05 // 5% tolerance for sentence continuation
-        guard verticalDistance <= maxDistance else { 
-            logger.debug("❌ Vertical distance too large: \(verticalDistance) > \(maxDistance)")
-            return false 
+        // For cross-page optimization, we allow different pages
+        // but we still need to check vertical distance for same-page elements
+        if current.pageNumber == next.pageNumber {
+            // Same page: check vertical distance (reasonable proximity)
+            let verticalDistance = abs(current.boundingBox.minY - next.boundingBox.minY)
+            let maxDistance: CGFloat = 0.05 // 5% tolerance for sentence continuation
+            guard verticalDistance <= maxDistance else { 
+                logger.debug("❌ Vertical distance too large: \(verticalDistance) > \(maxDistance)")
+                return false 
+            }
+        } else {
+            // Cross-page: no vertical distance check needed
+            logger.debug("Cross-page continuation: page \(current.pageNumber) -> page \(next.pageNumber)")
         }
         
         guard let nextText = next.text else { 
@@ -1344,5 +1345,67 @@ public class HeaderAndListDetector {
     private func containsChineseCharacters(_ text: String) -> Bool {
         let chineseCharacterPattern = "[\\p{Script=Han}]"
         return text.range(of: chineseCharacterPattern, options: .regularExpression) != nil
+    }
+    
+    /// Optimizes cross-page sentences by redistributing content between consecutive pages
+    /// This method moves incomplete sentences from the end of one page to the beginning of the next page
+    /// to create complete, self-contained sentences on each page.
+    public func optimizeCrossPageSentences(
+        currentPage: [DocumentElement],
+        nextPage: [DocumentElement],
+        currentPageNumber: Int,
+        nextPageNumber: Int
+    ) async throws -> (optimizedCurrentPage: [DocumentElement], optimizedNextPage: [DocumentElement]) {
+        
+        guard !currentPage.isEmpty else {
+            return (currentPage, nextPage)
+        }
+        
+        var optimizedCurrentPage = currentPage
+        var optimizedNextPage = nextPage
+        
+        // Find the last element of the current page
+        guard let lastCurrentElement = currentPage.last else {
+            return (currentPage, nextPage)
+        }
+        
+        // Check if the last element of current page is an incomplete sentence
+        if isIncompleteSentence(lastCurrentElement) {
+            logger.debug("Found incomplete sentence at end of page \(currentPageNumber): '\(lastCurrentElement.text ?? "")'")
+            
+            // Look for sentence continuation at the beginning of the next page
+            if let firstNextElement = nextPage.first {
+                if isSafeSentenceContinuation(lastCurrentElement, firstNextElement) {
+                    logger.debug("Found sentence continuation at beginning of page \(nextPageNumber): '\(firstNextElement.text ?? "")'")
+                    
+                    // Merge the incomplete sentence with its continuation
+                    let mergedText = (lastCurrentElement.text ?? "") + (firstNextElement.text ?? "")
+                    
+                    // Create a merged element that spans both pages
+                    let mergedBoundingBox = lastCurrentElement.boundingBox.union(firstNextElement.boundingBox)
+                    
+                    let mergedElement = DocumentElement(
+                        type: lastCurrentElement.type,
+                        boundingBox: mergedBoundingBox,
+                        contentData: Data(),
+                        confidence: min(lastCurrentElement.confidence, firstNextElement.confidence),
+                        pageNumber: currentPageNumber, // Keep it on the current page
+                        text: mergedText,
+                        metadata: lastCurrentElement.metadata.merging(firstNextElement.metadata) { _, new in new },
+                        headerLevel: lastCurrentElement.headerLevel
+                    )
+                    
+                    // Replace the last element of current page with the merged element
+                    optimizedCurrentPage[optimizedCurrentPage.count - 1] = mergedElement
+                    
+                    // Remove the continuation element from the next page
+                    optimizedNextPage.removeFirst()
+                    
+                    logger.info("Successfully merged cross-page sentence: '\(mergedText)'")
+                }
+            }
+        }
+        
+        return (optimizedCurrentPage, optimizedNextPage)
     }
 }
