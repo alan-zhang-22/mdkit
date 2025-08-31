@@ -3,7 +3,7 @@
     "overlapThreshold": 0.15,
     "enableHeaderFooterDetection": true,
     "pageHeaderRegion": [0.85, 1.0],
-    "pageFooterRegion": [0.0, 0.08],
+    "pageFooterRegion": [0.0, 0.082],
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.01,
     "isMergeDistanceNormalized": true,

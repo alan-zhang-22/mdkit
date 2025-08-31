@@ -593,6 +593,9 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         // Sort by position
         processedElements = sortElementsByPosition(processedElements)
         
+        // Normalize all list items for consistent formatting
+        processedElements = headerAndListDetector.normalizeAllListItems(processedElements)
+        
         return processedElements
     }
     

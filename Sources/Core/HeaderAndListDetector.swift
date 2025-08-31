@@ -1307,16 +1307,103 @@ public class HeaderAndListDetector {
         // Calculate average confidence
         let mergedConfidence = elements.map { $0.confidence }.reduce(0, +) / Float(elements.count)
         
+        // Normalize the merged text for better markdown output
+        let normalizedText = normalizeListItemText(mergedText)
+        
         return DocumentElement(
             type: .listItem,
             boundingBox: mergedBoundingBox,
             contentData: firstElement.contentData,
             confidence: mergedConfidence,
             pageNumber: firstElement.pageNumber,
-            text: mergedText,
+            text: normalizedText,
             metadata: mergedMetadata,
             headerLevel: nil // List items don't have header levels
         )
+    }
+    
+    /// Normalizes list item text by standardizing markers and spacing
+    /// This addresses issues with Chinese characters and inconsistent spacing
+    /// Only replaces the FIRST Chinese '）' that serves as the list marker separator
+    public func normalizeListItemText(_ text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Pattern to match list item markers and split into (marker, content)
+        // This handles various formats:
+        // - a) content
+        // - a） content  
+        // - 1. content
+        // - 1） content
+        // - 甲 content
+        // - • content
+        let markerPattern = #"^([a-zA-Z0-9一二三四五六七八九十甲乙丙丁戊己庚辛壬癸•\-\*])\s*[）\)\.\-\*]\s*(.*)$"#
+        
+        guard let regex = try? NSRegularExpression(pattern: markerPattern, options: []) else {
+            return trimmedText // Return original if regex fails
+        }
+        
+        let nsString = trimmedText as NSString
+        let matches = regex.matches(in: trimmedText, options: [], range: NSRange(location: 0, length: nsString.length))
+        
+        guard let match = matches.first else {
+            return trimmedText // No marker pattern found, return original
+        }
+        
+        // Extract marker and content
+        let markerRange = match.range(at: 1)
+        let contentRange = match.range(at: 2)
+        
+        guard markerRange.location != NSNotFound && contentRange.location != NSNotFound else {
+            return trimmedText
+        }
+        
+        let marker = nsString.substring(with: markerRange).trimmingCharacters(in: .whitespacesAndNewlines)
+        let content = nsString.substring(with: contentRange).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Normalize the marker format based on type
+        let normalizedMarker: String
+        if marker.range(of: #"^[一二三四五六七八九十]+$"#, options: .regularExpression) != nil {
+            // Chinese numerals - keep as is
+            normalizedMarker = marker
+        } else if marker.range(of: #"^[甲乙丙丁戊己庚辛壬癸]+$"#, options: .regularExpression) != nil {
+            // Chinese letters - keep as is  
+            normalizedMarker = marker
+        } else if marker.range(of: #"^[a-zA-Z]+$"#, options: .regularExpression) != nil {
+            // English letters - use English parenthesis
+            normalizedMarker = "\(marker))"
+        } else if marker.range(of: #"^\d+$"#, options: .regularExpression) != nil {
+            // Numbers - use English parenthesis
+            normalizedMarker = "\(marker))"
+        } else {
+            // Other markers (bullets, etc.) - keep as is
+            normalizedMarker = marker
+        }
+        
+        // Combine with exactly one space between marker and content
+        // The content preserves any additional Chinese '）' characters that are part of the text
+        return "\(normalizedMarker) \(content)"
+    }
+    
+    /// Normalizes all list item elements in a collection
+    /// This ensures consistent formatting across all list items
+    public func normalizeAllListItems(_ elements: [DocumentElement]) -> [DocumentElement] {
+        return elements.map { element in
+            if element.type == .listItem, let text = element.text {
+                let normalizedText = normalizeListItemText(text)
+                return DocumentElement(
+                    id: element.id,
+                    type: element.type,
+                    boundingBox: element.boundingBox,
+                    contentData: element.contentData,
+                    confidence: element.confidence,
+                    pageNumber: element.pageNumber,
+                    text: normalizedText,
+                    metadata: element.metadata,
+                    headerLevel: element.headerLevel
+                )
+            }
+            return element
+        }
     }
     
     /// Checks if text is in title case
