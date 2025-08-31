@@ -78,7 +78,6 @@ public final class OutputGenerator: OutputGenerating {
         
         for pageNumber in sortedPages {
             let pageElements = elementsByPage[pageNumber] ?? []
-            output += "## Page \(pageNumber)\n\n"
             
             // Sort elements by position (top to bottom, left to right)
             // Note: PDF coordinates have origin at bottom-left, so smaller Y = top of page
@@ -118,7 +117,6 @@ public final class OutputGenerator: OutputGenerating {
         
         for pageNumber in sortedPages {
             let pageElements = elementsByPage[pageNumber] ?? []
-            output += "## Page \(pageNumber)\n\n"
             
             // Sort elements by position (top to bottom, left to right)
             // Note: PDF coordinates have origin at bottom-left, so smaller Y = top of page
@@ -241,7 +239,6 @@ public final class OutputGenerator: OutputGenerating {
         
         for pageNumber in sortedPages {
             let pageElements = elementsByPage[pageNumber] ?? []
-            output += "## Page \(pageNumber)\n\n"
             
             // Sort elements by position (top to bottom, left to right)
             // Note: PDF coordinates have origin at bottom-left, so smaller Y = top of page
@@ -362,7 +359,6 @@ public final class OutputGenerator: OutputGenerating {
             }
             
             if !titles.isEmpty {
-                toc += "### Page \(pageNumber)\n"
                 for (index, title) in titles.enumerated() {
                     toc += "\(index + 1). \(title)\n"
                 }

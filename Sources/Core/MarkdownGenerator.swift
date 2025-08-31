@@ -66,20 +66,36 @@ public final class MarkdownGenerator: Sendable {
         
         logger.info("Starting markdown generation for \(elements.count) elements")
         
+        // Add document header
         var markdownLines: [String] = []
+        markdownLines.append("# Document Processing Results")
+        markdownLines.append("")
+        markdownLines.append("Generated on: \(Date().formatted())")
+        markdownLines.append("Total elements: \(elements.count)")
+        markdownLines.append("")
+        
+        // Sort elements by page and position (top to bottom, left to right)
+        let sortedElements = sortElementsByPosition(elements)
         
         // Process each element
-        for (index, element) in elements.enumerated() {
-            let elementMarkdown = try generateMarkdownForElement(element, at: index, in: elements)
+        for (index, element) in sortedElements.enumerated() {
+            let elementMarkdown = try generateMarkdownForElement(element, at: index, in: sortedElements)
             
             if !elementMarkdown.isEmpty {
                 markdownLines.append(elementMarkdown)
                 
                 // Add spacing between elements
-                if index < elements.count - 1 {
+                if index < sortedElements.count - 1 {
                     markdownLines.append("")
                 }
             }
+        }
+        
+        // Add table of contents if enabled
+        if config.addTableOfContents {
+            let toc = generateTableOfContents(from: sortedElements)
+            markdownLines.append("")
+            markdownLines.append(toc)
         }
         
         let markdown = markdownLines.joined(separator: "\n")
@@ -148,7 +164,16 @@ public final class MarkdownGenerator: Sendable {
     
     /// Generate markdown for header elements with level calculation
     private func generateHeaderMarkdown(_ text: String, element: DocumentElement, in elements: [DocumentElement]) -> String {
-        let level = calculateHeaderLevel(for: element, in: elements)
+        // Use the header level calculated by HeaderAndListDetector if available
+        let level = element.headerLevel ?? calculateHeaderLevel(for: element, in: elements)
+        
+        // Debug logging to see what's happening
+        if element.headerLevel != nil {
+            logger.debug("Using stored header level: \(element.headerLevel!) for '\(text)'")
+        } else {
+            logger.debug("No stored header level, using position-based calculation: \(level) for '\(text)'")
+        }
+        
         let prefix = String(repeating: "#", count: level)
         return "\(prefix) \(text)"
     }
@@ -224,7 +249,49 @@ public final class MarkdownGenerator: Sendable {
         }
     }
     
-
+    /// Sort elements by page and position (top to bottom, left to right)
+    private func sortElementsByPosition(_ elements: [DocumentElement]) -> [DocumentElement] {
+        // Group elements by page
+        let elementsByPage = Dictionary(grouping: elements) { $0.pageNumber }
+        let sortedPages = elementsByPage.keys.sorted()
+        
+        var sortedElements: [DocumentElement] = []
+        
+        for pageNumber in sortedPages {
+            let pageElements = elementsByPage[pageNumber] ?? []
+            
+            // Sort elements by position (top to bottom, left to right)
+            // Note: PDF coordinates have origin at bottom-left, so smaller Y = top of page
+            let sortedPageElements = pageElements.sorted { (element1: DocumentElement, element2: DocumentElement) in
+                if abs(element1.boundingBox.minY - element2.boundingBox.minY) < 0.01 {
+                    // If y positions are very close, sort by x position
+                    return element1.boundingBox.minX < element2.boundingBox.minX
+                }
+                return element1.boundingBox.minY > element2.boundingBox.minY  // Inverted for correct top-to-bottom order
+            }
+            
+            sortedElements.append(contentsOf: sortedPageElements)
+        }
+        
+        return sortedElements
+    }
+    
+    /// Generate table of contents from elements
+    private func generateTableOfContents(from elements: [DocumentElement]) -> String {
+        var toc = "## Table of Contents\n\n"
+        
+        let headers = elements.compactMap { element -> String? in
+            guard element.type == .title || element.type == .header,
+                  let text = element.text else { return nil }
+            return text
+        }
+        
+        for (index, header) in headers.enumerated() {
+            toc += "\(index + 1). \(header)\n"
+        }
+        
+        return toc
+    }
 }
 
 

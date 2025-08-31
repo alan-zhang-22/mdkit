@@ -168,8 +168,12 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         
         logger.info("OCR completed, extracted \(observations.count) text observations")
         
+        // Filter out page headers and footers based on configuration
+        let filteredObservations = filterPageHeadersAndFooters(observations, pageNumber: pageNumber)
+        logger.info("After header/footer filtering: \(filteredObservations.count) observations")
+        
         // Convert observations to document elements
-        let elements = try convertObservationsToElements(observations, pageNumber: pageNumber)
+        let elements = try convertObservationsToElements(filteredObservations, pageNumber: pageNumber)
         
         // Post-process elements
         let processedElements = try await postProcessElements(elements)
@@ -455,7 +459,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             
             // Use HeaderAndListDetector for proper element type detection
             let elementType: DocumentElementType
-            if headerAndListDetector.detectHeader(in: DocumentElement(
+            let headerResult = headerAndListDetector.detectHeader(in: DocumentElement(
                 type: .paragraph,
                 boundingBox: boundingBox,
                 contentData: Data(),
@@ -463,17 +467,20 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 pageNumber: pageNumber,
                 text: text,
                 metadata: [:]
-            )).isHeader {
+            ))
+            let listItemResult = headerAndListDetector.detectListItem(in: DocumentElement(
+                type: .paragraph,
+                boundingBox: boundingBox,
+                contentData: Data(),
+                confidence: confidence,
+                pageNumber: pageNumber,
+                text: text,
+                metadata: [:]
+            ))
+            
+            if headerResult.isHeader {
                 elementType = .header
-            } else if headerAndListDetector.detectListItem(in: DocumentElement(
-                type: .paragraph,
-                boundingBox: boundingBox,
-                contentData: Data(),
-                confidence: confidence,
-                pageNumber: pageNumber,
-                text: text,
-                metadata: [:]
-            )).isListItem {
+            } else if listItemResult.isListItem {
                 elementType = .listItem
             } else {
                 elementType = .paragraph
@@ -491,8 +498,14 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 metadata: [
                     "ocr_method": "traditional_vision",
                     "confidence": String(confidence)
-                ]
+                ],
+                headerLevel: headerResult.isHeader ? headerResult.level : nil
             )
+            
+            // Debug logging for header elements
+            if elementType == .header {
+                logger.debug("Created header element: '\(text)' with level: \(element.headerLevel ?? -1)")
+            }
             
             elements.append(element)
             logger.info("      ✅ Element created with ID: \(element.id)")
@@ -516,9 +529,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         // Merge split elements
         processedElements = try await mergeSplitElements(processedElements, language: language)
         
-        // Remove duplicates
-        let deduplicationResult = try removeDuplicates(from: processedElements)
-        processedElements = deduplicationResult.elements
+        // Duplicate removal removed - it was too aggressive and destroyed legitimate document structure
+        // processedElements = processedElements (no change)
         
         // Sort by position
         processedElements = sortElementsByPosition(processedElements)
@@ -608,15 +620,20 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         mergedMetadata["merged_from"] = "\(element1.id),\(element2.id)"
         mergedMetadata["ocr_method"] = "traditional_vision"
         
+        // Preserve the first element's type and properties (important for headers)
+        let mergedType = element1.type
+        let mergedHeaderLevel = element1.headerLevel
+        
         return DocumentElement(
             id: UUID(),
-            type: .paragraph, // Merged elements become paragraphs
+            type: mergedType,
             boundingBox: mergedBoundingBox,
             contentData: Data(), // Empty data for merged elements
             confidence: min(element1.confidence, element2.confidence),
             pageNumber: element1.pageNumber,
             text: mergedText,
-            metadata: mergedMetadata
+            metadata: mergedMetadata,
+            headerLevel: mergedHeaderLevel
         )
     }
     
@@ -822,5 +839,55 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         
         logger.info("Successfully extracted page \(pageNumber) as image (\(imageData.count) bytes)")
         return imageData
+    }
+    
+    /// Filters out page headers and footers based on configuration parameters
+    /// This is applied as the first step before any other processing
+    /// - Parameters:
+    ///   - observations: Original OCR observations from Vision framework
+    ///   - pageNumber: Current page number being processed
+    /// - Returns: Filtered observations with headers/footers removed
+    private func filterPageHeadersAndFooters(_ observations: [VNRecognizedTextObservation], pageNumber: Int) -> [VNRecognizedTextObservation] {
+        // Check if header/footer detection is enabled in configuration
+        guard configuration.processing.enableHeaderFooterDetection else {
+            logger.info("Header/footer detection disabled in configuration, returning all observations")
+            return observations
+        }
+        
+        let headerRegion = configuration.processing.pageHeaderRegion
+        let footerRegion = configuration.processing.pageFooterRegion
+        
+        logger.info("Filtering headers/footers - Header region: \(headerRegion), Footer region: \(footerRegion)")
+        
+        var filteredObservations: [VNRecognizedTextObservation] = []
+        var removedCount = 0
+        
+        for observation in observations {
+            let boundingBox = observation.boundingBox
+            
+            // Check if observation is in header region (top of page)
+            let isInHeaderRegion = boundingBox.minY >= headerRegion[0] && boundingBox.maxY <= headerRegion[1]
+            
+            // Check if observation is in footer region (bottom of page)
+            let isInFooterRegion = boundingBox.minY >= footerRegion[0] && boundingBox.maxY <= footerRegion[1]
+            
+            if isInHeaderRegion {
+                logger.debug("Removing header observation: '\(observation.topCandidates(1).first?.string ?? "")' at Y=[\(String(format: "%.3f", boundingBox.minY))-\(String(format: "%.3f", boundingBox.maxY))]")
+                removedCount += 1
+                continue
+            }
+            
+            if isInFooterRegion {
+                logger.debug("Removing footer observation: '\(observation.topCandidates(1).first?.string ?? "")' at Y=[\(String(format: "%.3f", boundingBox.minY))-\(String(format: "%.3f", boundingBox.maxY))]")
+                removedCount += 1
+                continue
+            }
+            
+            // Keep observation if it's not in header or footer regions
+            filteredObservations.append(observation)
+        }
+        
+        logger.info("Header/footer filtering completed: removed \(removedCount) observations, kept \(filteredObservations.count) observations")
+        return filteredObservations
     }
 }

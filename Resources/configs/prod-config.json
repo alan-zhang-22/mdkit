@@ -321,7 +321,8 @@
     "headerFormat": "atx",
     "listFormat": "unordered",
     "tableFormat": "standard",
-    "codeBlockFormat": "fenced"
+    "codeBlockFormat": "fenced",
+    "addTableOfContents": true
   },
   "ocr": {
     "recognitionLevel": "accurate",

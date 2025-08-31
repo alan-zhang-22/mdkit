@@ -284,7 +284,17 @@ public class MainProcessor {
         // Generate each output type
         for outputType in OutputType.allCases {
             do {
-                let output = try outputGenerator.generateOutput(from: elements, outputType: outputType)
+                let output: String
+                
+                // Use MarkdownGenerator for markdown output, OutputGenerator for others
+                if outputType == .markdown {
+                    output = try markdownGenerator.generateMarkdown(from: elements)
+                    logger.info("Generated markdown using MarkdownGenerator")
+                } else {
+                    output = try outputGenerator.generateOutput(from: elements, outputType: outputType)
+                    logger.info("Generated \(outputType.description) using OutputGenerator")
+                }
+                
                 outputs[outputType] = output
                 logger.info("Generated \(outputType.description) output")
             } catch {

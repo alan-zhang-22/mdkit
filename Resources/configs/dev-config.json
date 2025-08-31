@@ -3,7 +3,7 @@
     "overlapThreshold": 0.15,
     "enableHeaderFooterDetection": true,
     "pageHeaderRegion": [0.90, 1.0],
-    "pageFooterRegion": [0.0, 0.1],
+    "pageFooterRegion": [0.0, 0.08],
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.01,
     "isMergeDistanceNormalized": true,
@@ -322,7 +322,8 @@
     "headerFormat": "atx",
     "listFormat": "unordered",
     "tableFormat": "standard",
-    "codeBlockFormat": "fenced"
+    "codeBlockFormat": "fenced",
+    "addTableOfContents": true
   },
   "imageExtraction": {
     "enabled": true,

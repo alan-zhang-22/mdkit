@@ -786,7 +786,8 @@ public class HeaderAndListDetector {
                     confidence: leftToRightElements.map { $0.confidence }.reduce(0, +) / Float(leftToRightElements.count),
                     pageNumber: currentElement.pageNumber,
                     text: mergedText,
-                    metadata: leftToRightElements[0].metadata
+                    metadata: leftToRightElements[0].metadata,
+                    headerLevel: leftToRightElements[0].headerLevel
                 )
                 
                 mergedElements.append(merged)
@@ -1154,7 +1155,8 @@ public class HeaderAndListDetector {
             confidence: mergedConfidence,
             pageNumber: firstElement.pageNumber,
             text: mergedText,
-            metadata: mergedMetadata
+            metadata: mergedMetadata,
+            headerLevel: firstElement.headerLevel
         )
     }
     
@@ -1188,7 +1190,8 @@ public class HeaderAndListDetector {
             confidence: mergedConfidence,
             pageNumber: firstElement.pageNumber,
             text: mergedText,
-            metadata: mergedMetadata
+            metadata: mergedMetadata,
+            headerLevel: nil // List items don't have header levels
         )
     }
     
@@ -1326,7 +1329,8 @@ public class HeaderAndListDetector {
             confidence: min(element1.confidence, element2.confidence), // Use lower confidence
             pageNumber: element1.pageNumber,
             text: combinedText,
-            metadata: element1.metadata.merging(element2.metadata) { _, new in new }
+            metadata: element1.metadata.merging(element2.metadata) { _, new in new },
+            headerLevel: element1.headerLevel
         )
     }
     

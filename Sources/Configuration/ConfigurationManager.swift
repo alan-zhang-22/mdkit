@@ -133,7 +133,7 @@ public class ConfigurationManager: ConfigurationManaging {
             listDetection: ListDetectionConfig(),
             duplicationDetection: DuplicationDetectionConfig(),
             positionSorting: PositionSortingConfig(),
-            markdownGeneration: MarkdownGenerationConfig(),
+            markdownGeneration: MarkdownGenerationConfig(addTableOfContents: true),
             ocr: OCRConfig(),
             performance: PerformanceConfig(),
             fileManagement: FileManagementConfig(),
@@ -404,7 +404,8 @@ public class ConfigurationManager: ConfigurationManaging {
                 headerFormat: "atx",
                 listFormat: "unordered",
                 tableFormat: "standard",
-                codeBlockFormat: "fenced"
+                codeBlockFormat: "fenced",
+                addTableOfContents: true
             ),
             imageExtraction: ImageExtractionConfig(
                 enabled: true,

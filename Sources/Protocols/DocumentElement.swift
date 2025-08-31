@@ -34,6 +34,9 @@ public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
     /// Additional metadata for the element
     public let metadata: [String: String]
     
+    /// Header level for header elements (calculated by HeaderAndListDetector)
+    public let headerLevel: Int?
+    
     /// Timestamp when this element was processed
     public let processedAt: Date
     
@@ -46,6 +49,7 @@ public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
         pageNumber: Int,
         text: String? = nil,
         metadata: [String: String] = [:],
+        headerLevel: Int? = nil,
         processedAt: Date = Date()
     ) {
         self.id = id
@@ -56,6 +60,7 @@ public struct DocumentElement: Identifiable, Codable, Equatable, Sendable {
         self.pageNumber = pageNumber
         self.text = text
         self.metadata = metadata
+        self.headerLevel = headerLevel
         self.processedAt = processedAt
     }
 }

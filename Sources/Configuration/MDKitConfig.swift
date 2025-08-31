@@ -654,6 +654,7 @@ public struct MarkdownGenerationConfig: Codable, Sendable {
     public let listFormat: String
     public let tableFormat: String
     public let codeBlockFormat: String
+    public let addTableOfContents: Bool
 
     
     public init(
@@ -663,7 +664,7 @@ public struct MarkdownGenerationConfig: Codable, Sendable {
         listFormat: String = "unordered",
         tableFormat: String = "standard",
         codeBlockFormat: String = "fenced",
-
+        addTableOfContents: Bool = true
     ) {
         self.preservePageBreaks = preservePageBreaks
         self.extractImages = extractImages
@@ -671,7 +672,7 @@ public struct MarkdownGenerationConfig: Codable, Sendable {
         self.listFormat = listFormat
         self.tableFormat = tableFormat
         self.codeBlockFormat = codeBlockFormat
-
+        self.addTableOfContents = addTableOfContents
     }
 }
 
