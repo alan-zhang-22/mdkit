@@ -209,24 +209,7 @@ final class TraditionalOCRDocumentProcessorTests: XCTestCase {
         print(String(repeating: "=", count: 50) + "\n")
     }
     
-    /// Test 10: Table of Contents Generation (Page 36 Only)
-    func testTableOfContentsGeneration() async throws {
-        // Process only page 36
-        let pageRange = PageRange.single(36)
-        let elements = try await processor.processDocument(at: testDocumentPath, pageRange: pageRange)
-        let toc = try processor.generateTableOfContents(from: elements)
-        
-        // Verify TOC generation
-        XCTAssertGreaterThan(toc.count, 0, "Table of contents should not be empty")
-        XCTAssertTrue(toc.contains("Table of Contents"), "TOC should contain title")
-        
-        // Print the generated table of contents for inspection
-        print("\n" + String(repeating: "=", count: 50))
-        print("GENERATED TABLE OF CONTENTS FROM PAGE 36:")
-        print(String(repeating: "=", count: 50))
-        print(toc)
-        print(String(repeating: "=", count: 50) + "\n")
-    }
+
     
 
     

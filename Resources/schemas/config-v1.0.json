@@ -224,7 +224,7 @@
         "addTableOfContents": {
           "type": "boolean",
           "default": true,
-          "description": "Whether to add table of contents"
+                    "description": "Whether to add table of contents"
         },
         "generatedTOC": {
           "type": "object",
@@ -260,8 +260,7 @@
           },
           "required": ["enabled", "maxHeaderLevel", "includeTitleElements", "includeHeaderElements", "excludeTOCPages"]
         }
-      },
-      "required": ["preservePageBreaks", "extractImages", "headerFormat", "listFormat", "tableFormat", "codeBlockFormat", "addTableOfContents", "generatedTOC"]
+              "required": ["preservePageBreaks", "extractImages", "headerFormat", "listFormat", "tableFormat", "codeBlockFormat", "addTableOfContents", "generatedTOC"]
     },
     "llm": {
       "type": "object",

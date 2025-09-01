@@ -231,11 +231,7 @@ public protocol DocumentProcessing {
     /// - Throws: An error if markdown generation fails
     func generateMarkdown(from elements: [DocumentElement], inputFilename: String?, blankPages: [Int], totalPagesProcessed: Int, totalPagesRequested: Int) throws -> String
     
-    /// Generates a table of contents from document elements
-    /// - Parameter elements: The document elements to analyze
-    /// - Returns: The generated table of contents as markdown
-    /// - Throws: An error if TOC generation fails
-    func generateTableOfContents(from elements: [DocumentElement]) throws -> String
+
     
 
 }

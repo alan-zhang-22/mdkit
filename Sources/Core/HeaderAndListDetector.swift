@@ -1023,6 +1023,14 @@ public class HeaderAndListDetector {
                 logger.debug("❌ Vertical distance too large: \(verticalDistance) > \(maxDistance)")
                 return false 
             }
+            
+            // NEW: Check if current element ends far from the right edge (indicating a complete sentence)
+            let currentMaxX = current.boundingBox.maxX
+            let rightEdgeThreshold: CGFloat = 0.7 // If element ends before 70% of page width, it's likely complete
+            if currentMaxX < rightEdgeThreshold {
+                logger.debug("❌ Current element ends far from right edge (maxX: \(currentMaxX) < \(rightEdgeThreshold)) - likely a complete sentence")
+                return false
+            }
         } else {
             // Cross-page: no vertical distance check needed
             logger.debug("Cross-page continuation: page \(current.pageNumber) -> page \(next.pageNumber)")
@@ -1353,11 +1361,12 @@ public class HeaderAndListDetector {
         // This handles various formats:
         // - a) content
         // - a） content  
+        // - a〉 content
         // - 1. content
         // - 1） content
         // - 甲 content
         // - • content
-        let markerPattern = #"^([a-zA-Z0-9一二三四五六七八九十甲乙丙丁戊己庚辛壬癸•\-\*])\s*[）\)\.\-\*]\s*(.*)$"#
+        let markerPattern = #"^([a-zA-Z0-9一二三四五六七八九十甲乙丙丁戊己庚辛壬癸•\-\*])\s*[）\)〉\.\-\*]\s*(.*)$"#
         
         guard let regex = try? NSRegularExpression(pattern: markerPattern, options: []) else {
             return trimmedText // Return original if regex fails
@@ -1841,6 +1850,243 @@ public class HeaderAndListDetector {
         let totalElements = elements.count
         return totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
     }
+    
+    // MARK: - Page-Level Header Optimization
+    
+    /// Optimizes headers on a page by analyzing numbering consistency and filtering false positives
+    public func optimizePageHeaders(_ elements: [DocumentElement]) -> [DocumentElement] {
+        guard !elements.isEmpty else { return elements }
+        
+        // Group elements by page number
+        let pageGroups = Dictionary(grouping: elements) { $0.pageNumber }
+        
+        var optimizedElements: [DocumentElement] = []
+        
+        for (pageNumber, pageElements) in pageGroups.sorted(by: { $0.key < $1.key }) {
+            let optimizedPageElements = optimizeHeadersOnPage(pageElements, pageNumber: pageNumber)
+            optimizedElements.append(contentsOf: optimizedPageElements)
+        }
+        
+        return optimizedElements
+    }
+    
+    /// Optimizes headers on a single page by analyzing numbering patterns
+    private func optimizeHeadersOnPage(_ elements: [DocumentElement], pageNumber: Int) -> [DocumentElement] {
+        // Extract headers from the page
+        let headers = elements.filter { $0.type == .header }
+        
+        guard headers.count > 1 else { return elements }
+        
+        // Analyze header numbering patterns
+        let headerAnalysis = analyzeHeaderNumbering(headers)
+        
+        // Filter out false headers and identify missing ones
+        let optimizedHeaders = filterFalseHeaders(headers, analysis: headerAnalysis)
+        
+        // Replace headers in the original elements
+        var optimizedElements = elements
+        for (index, element) in optimizedElements.enumerated() {
+            if element.type == .header {
+                if let optimizedHeader = optimizedHeaders.first(where: { $0.id == element.id }) {
+                    optimizedElements[index] = optimizedHeader
+                } else {
+                    // Convert false header back to paragraph
+                    optimizedElements[index] = DocumentElement(
+                        id: element.id,
+                        type: .paragraph,
+                        boundingBox: element.boundingBox,
+                        contentData: element.contentData,
+                        confidence: element.confidence,
+                        pageNumber: element.pageNumber,
+                        text: element.text,
+                        metadata: element.metadata,
+                        headerLevel: nil
+                    )
+                    logger.info("Converted false header to paragraph on page \(pageNumber): '\(element.text ?? "")'")
+                }
+            }
+        }
+        
+        return optimizedElements
+    }
+    
+    /// Analyzes header numbering patterns on a page
+    private func analyzeHeaderNumbering(_ headers: [DocumentElement]) -> HeaderNumberingAnalysis {
+        var numberedHeaders: [(element: DocumentElement, number: String, level: Int)] = []
+        
+        for header in headers {
+            if let text = header.text,
+               let number = extractHeaderNumber(text) {
+                numberedHeaders.append((header, number, header.headerLevel ?? 1))
+            }
+        }
+        
+        // Group by header level
+        let levelGroups = Dictionary(grouping: numberedHeaders) { $0.level }
+        
+        var analysis = HeaderNumberingAnalysis()
+        
+        for (level, headers) in levelGroups {
+            let numbers = headers.map { $0.number }.sorted()
+            analysis.levelPatterns[level] = analyzeNumberSequence(numbers)
+        }
+        
+        return analysis
+    }
+    
+    /// Extracts the header number from text
+    private func extractHeaderNumber(_ text: String) -> String? {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Try to match numbered header patterns
+        for pattern in config.headerDetection.patterns.numberedHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if let match = regex.firstMatch(in: trimmedText, range: range) {
+                    let matchRange = Range(match.range, in: trimmedText)!
+                    let matchText = String(trimmedText[matchRange])
+                    // Extract just the number part
+                    if let numberMatch = matchText.range(of: "^\\d+(?:\\.\\d+)*", options: .regularExpression) {
+                        return String(matchText[numberMatch])
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Analyzes a sequence of numbers to detect patterns and anomalies
+    private func analyzeNumberSequence(_ numbers: [String]) -> NumberSequenceAnalysis {
+        var analysis = NumberSequenceAnalysis()
+        
+        guard numbers.count > 1 else {
+            analysis.isConsistent = true
+            return analysis
+        }
+        
+        // Convert to integers for analysis (handle simple numbers first)
+        var integerNumbers: [Int] = []
+        for number in numbers {
+            if let intValue = Int(number) {
+                integerNumbers.append(intValue)
+            }
+        }
+        
+        guard integerNumbers.count > 1 else {
+            analysis.isConsistent = true
+            return analysis
+        }
+        
+        // Sort for analysis
+        integerNumbers.sort()
+        
+        // Check for consistent increment
+        var differences: [Int] = []
+        for i in 1..<integerNumbers.count {
+            differences.append(integerNumbers[i] - integerNumbers[i-1])
+        }
+        
+        // If all differences are 1, it's a perfect sequence
+        if differences.allSatisfy({ $0 == 1 }) {
+            analysis.isConsistent = true
+            analysis.expectedIncrement = 1
+            analysis.missingNumbers = findMissingNumbers(integerNumbers)
+        } else {
+            // Check for consistent increment > 1
+            let uniqueDifferences = Set(differences)
+            if uniqueDifferences.count == 1, let increment = uniqueDifferences.first {
+                analysis.isConsistent = true
+                analysis.expectedIncrement = increment
+                analysis.missingNumbers = findMissingNumbers(integerNumbers, increment: increment)
+            } else {
+                analysis.isConsistent = false
+                analysis.outliers = findOutliers(integerNumbers, differences: differences)
+            }
+        }
+        
+        return analysis
+    }
+    
+    /// Finds missing numbers in a sequence
+    private func findMissingNumbers(_ numbers: [Int], increment: Int = 1) -> [Int] {
+        guard numbers.count > 1 else { return [] }
+        
+        var missing: [Int] = []
+        let min = numbers.min()!
+        let max = numbers.max()!
+        
+        for i in stride(from: min, through: max, by: increment) {
+            if !numbers.contains(i) {
+                missing.append(i)
+            }
+        }
+        
+        return missing
+    }
+    
+    /// Finds outliers in a sequence
+    private func findOutliers(_ numbers: [Int], differences: [Int]) -> [Int] {
+        guard differences.count > 1 else { return [] }
+        
+        // Calculate median difference
+        let sortedDifferences = differences.sorted()
+        let medianDifference = sortedDifferences[sortedDifferences.count / 2]
+        
+        // Find numbers that create unusual differences
+        var outliers: [Int] = []
+        for i in 0..<differences.count {
+            if abs(differences[i] - medianDifference) > medianDifference {
+                // This difference is significantly different from the median
+                outliers.append(numbers[i + 1]) // The number that creates this difference
+            }
+        }
+        
+        return outliers
+    }
+    
+    /// Filters out false headers based on numbering analysis
+    private func filterFalseHeaders(_ headers: [DocumentElement], analysis: HeaderNumberingAnalysis) -> [DocumentElement] {
+        var filteredHeaders = headers
+        
+        for (level, sequenceAnalysis) in analysis.levelPatterns {
+            if !sequenceAnalysis.isConsistent {
+                // Find headers at this level that are outliers
+                let levelHeaders = headers.filter { $0.headerLevel == level }
+                
+                for header in levelHeaders {
+                    if let text = header.text,
+                       let number = extractHeaderNumber(text),
+                       let intNumber = Int(number),
+                       sequenceAnalysis.outliers.contains(intNumber) {
+                        
+                        // This is likely a false header
+                        logger.info("Identified false header based on numbering analysis: '\(text)' (number: \(number))")
+                        
+                        // Remove from filtered headers
+                        filteredHeaders.removeAll { $0.id == header.id }
+                    }
+                }
+            }
+        }
+        
+        return filteredHeaders
+    }
+}
+
+// MARK: - Supporting Structures
+
+/// Analysis of header numbering patterns on a page
+private struct HeaderNumberingAnalysis {
+    var levelPatterns: [Int: NumberSequenceAnalysis] = [:]
+}
+
+/// Analysis of a number sequence
+private struct NumberSequenceAnalysis {
+    var isConsistent: Bool = false
+    var expectedIncrement: Int = 1
+    var missingNumbers: [Int] = []
+    var outliers: [Int] = []
 }
 
 // MARK: - Extensions

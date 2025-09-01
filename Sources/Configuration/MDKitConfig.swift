@@ -645,6 +645,8 @@ public struct ImageExtractionConfig: Codable, Sendable {
     }
 }
 
+
+
 // MARK: - Generated TOC Configuration
 
 public struct GeneratedTOCConfig: Codable, Sendable {

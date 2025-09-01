@@ -224,6 +224,7 @@
     "patterns": {
       "numberedHeaders": [
         "^\\d+(?:\\.\\d+)*\\s",
+        "^\\d+(?:\\.\\d+)*[\\u4e00-\\u9fff]",
         "^\\d+[A-Z](?:\\.\\d+)*\\s",
         "^第\\d+[章节]\\s",
         "^\\d+[、.．]\\s",
@@ -290,7 +291,8 @@
         "^[甲乙丙丁戊己庚辛壬癸]\\s",
         "^[a-z]）\\s",
         "^[a-z]）$",
-        "^[a-z]）"
+        "^[a-z]）",
+        "^[a-z]〉"
       ],
       "bulletMarkers": [
         "^[•\\-\\*]\\s",
@@ -337,7 +339,7 @@
     "codeBlockFormat": "fenced",
     "addTableOfContents": true,
     "generatedTOC": {
-      "enabled": true,
+      "enabled": false,
       "maxHeaderLevel": 2,
       "includeTitleElements": true,
       "includeHeaderElements": true,

@@ -151,10 +151,7 @@ public final class OutputGenerator: OutputGenerating {
             }
         }
         
-        // Add table of contents
-        if config.fileManagement.addTableOfContents {
-            output += generateTableOfContents(from: filteredElements)
-        }
+
         
         logger.info("Generated markdown output with \(filteredElements.count) elements")
         return output
@@ -284,10 +281,7 @@ public final class OutputGenerator: OutputGenerating {
         output += "- Metadata has been preserved for context\n"
         output += "- Content is organized for optimal token efficiency\n\n"
         
-        // Add table of contents
-        if config.fileManagement.addTableOfContents {
-            output += generateTableOfContents(from: filteredElements)
-        }
+
         
         logger.info("Generated LLM-optimized markdown output with \(filteredElements.count) elements")
         return output
@@ -344,28 +338,5 @@ public final class OutputGenerator: OutputGenerating {
         return optimized
     }
     
-    private func generateTableOfContents(from elements: [DocumentElement]) -> String {
-        var toc = "## Table of Contents\n\n"
-        
-        let elementsByPage = Dictionary(grouping: elements) { $0.pageNumber }
-        let sortedPages = elementsByPage.keys.sorted()
-        
-        for pageNumber in sortedPages {
-            let pageElements = elementsByPage[pageNumber] ?? []
-            let titles = pageElements.compactMap { element -> String? in
-                guard element.type == .title || element.type == .header,
-                      let text = element.text else { return nil }
-                return text
-            }
-            
-            if !titles.isEmpty {
-                for (index, title) in titles.enumerated() {
-                    toc += "\(index + 1). \(title)\n"
-                }
-                toc += "\n"
-            }
-        }
-        
-        return toc
-    }
+
 }

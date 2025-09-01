@@ -107,19 +107,21 @@ public final class MarkdownGenerator: Sendable {
             if !elementMarkdown.isEmpty {
                 markdownLines.append(elementMarkdown)
                 
-                // Add spacing between elements
+                // Add spacing between elements, but not between TOC items
                 if index < sortedElements.count - 1 {
-                    markdownLines.append("")
+                    let nextElement = elementsWithTOCConversion[index + 1]
+                    let isCurrentTOC = element.type == .tocItem
+                    let isNextTOC = nextElement.type == .tocItem
+                    
+                    // Only add blank line if not between two TOC items
+                    if !(isCurrentTOC && isNextTOC) {
+                        markdownLines.append("")
+                    }
                 }
             }
         }
         
-        // Add table of contents if enabled
-        if config.addTableOfContents {
-            let toc = generateTableOfContents(from: elementsWithTOCConversion)
-            markdownLines.append("")
-            markdownLines.append(toc)
-        }
+
         
         let markdown = markdownLines.joined(separator: "\n")
         logger.info("Markdown generation completed successfully")
@@ -354,66 +356,7 @@ public final class MarkdownGenerator: Sendable {
         return sortedElements
     }
     
-    /// Generate table of contents from elements
-    private func generateTableOfContents(from elements: [DocumentElement]) -> String {
-        // Check if generated TOC is enabled
-        guard config.generatedTOC.enabled else {
-            return ""
-        }
-        
-        var toc = "## Table of Contents\n\n"
-        
-        // Filter elements based on configuration
-        let eligibleElements = elements.compactMap { element -> (String, Int)? in
-            // Check element type based on configuration
-            let isTitleElement = config.generatedTOC.includeTitleElements && element.type == .title
-            let isHeaderElement = config.generatedTOC.includeHeaderElements && element.type == .header
-            
-            guard (isTitleElement || isHeaderElement),
-                  let text = element.text else { return nil }
-            
-            // Calculate header level
-            let level = calculateHeaderLevelFromNumbering(text)
-            
-            // Check if level is within the configured maximum
-            guard level <= config.generatedTOC.maxHeaderLevel else { return nil }
-            
-            // Check if we should exclude TOC pages
-            if config.generatedTOC.excludeTOCPages {
-                // Check if this element is from a TOC page (high header ratio)
-                let pageElements = elements.filter { $0.pageNumber == element.pageNumber }
-                let headerCount = pageElements.filter { $0.type == .header }.count
-                let totalElements = pageElements.count
-                let headerRatio = totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
-                
-                if headerRatio >= 0.9 && totalElements >= 3 {
-                    return nil // Skip elements from TOC pages
-                }
-            }
-            
-            return (text, level)
-        }
-        
-        // Sort elements by level and then by position
-        let sortedElements = eligibleElements.sorted { first, second in
-            if first.1 != second.1 {
-                return first.1 < second.1 // Sort by level first
-            }
-            // If same level, find their positions in the original elements array
-            let firstIndex = elements.firstIndex { $0.text == first.0 } ?? 0
-            let secondIndex = elements.firstIndex { $0.text == second.0 } ?? 0
-            return firstIndex < secondIndex
-        }
-        
-        // Generate TOC entries with proper indentation based on level
-        for (header, level) in sortedElements {
-            let indent = String(repeating: "  ", count: level - 1)
-            let anchorId = generateAnchorId(from: header)
-            toc += "\(indent)- [\(header)](#\(anchorId))\n"
-        }
-        
-        return toc
-    }
+
     
     /// Generate anchor ID from header text (markdown-friendly)
     private func generateAnchorId(from text: String) -> String {

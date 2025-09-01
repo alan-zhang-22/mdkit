@@ -131,6 +131,15 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                     currentPageElementsFinal = currentPageElementsWithTOCCorrection
                 }
                 
+                // Step 4.7: Page-level header optimization (filter false headers and identify missing numbers)
+                let currentPageElementsWithHeaderOptimization: [DocumentElement]
+                if !isCurrentPageTOC {
+                    logger.info("Applying page-level header optimization on page \(pageNumber)")
+                    currentPageElementsWithHeaderOptimization = headerAndListDetector.optimizePageHeaders(currentPageElementsFinal)
+                } else {
+                    currentPageElementsWithHeaderOptimization = currentPageElementsFinal
+                }
+                
                 // Step 4.6: Also check if the previous page was a TOC page to prevent cross-page optimization
                 let isPreviousPageTOC: Bool
                 if let previousElements = previousPageElements {
@@ -160,14 +169,14 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                         allElements.append(contentsOf: normalizedPreviousPage)
                         
                         // Apply multi-line merging and normalization to current page
-                        let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsFinal)
+                        let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
                         previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
                     } else {
                         // Only run cross-page optimization if neither page is a TOC page
                         // This ensures TOC pages are never affected by cross-page optimization
                         let (optimizedPreviousPage, optimizedCurrentPage) = try await headerAndListDetector.optimizeCrossPageSentences(
                             currentPage: previousElements,
-                            nextPage: currentPageElementsWithHeadersRedetected,
+                            nextPage: currentPageElementsWithHeaderOptimization,
                             currentPageNumber: pagesToProcess[index - 1],
                             nextPageNumber: pageNumber
                         )
@@ -189,7 +198,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                     }
                 } else {
                     // First page - apply multi-line merging and normalization
-                    let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsFinal)
+                    let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
                     previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
                 }
             } else {
@@ -494,28 +503,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         return markdown
     }
     
-    public func generateTableOfContents(from elements: [DocumentElement]) throws -> String {
-        logger.info("Generating table of contents from \(elements.count) elements")
-        
-        let sortedElements = sortElementsByPosition(elements)
-        var toc = "# Table of Contents\n\n"
-        
-        for element in sortedElements {
-            guard let text = element.text else { continue }
-            
-            switch element.type {
-            case .title:
-                toc += "1. [\(text)](#\(text.lowercased().replacingOccurrences(of: " ", with: "-")))\n"
-            case .header:
-                toc += "   1. [\(text)](#\(text.lowercased().replacingOccurrences(of: " ", with: "-")))\n"
-            default:
-                break
-            }
-        }
-        
-        logger.info("Table of contents generation completed")
-        return toc
-    }
+
     
 
     
