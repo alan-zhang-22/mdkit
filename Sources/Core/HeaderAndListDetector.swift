@@ -175,6 +175,11 @@ public class HeaderAndListDetector {
     private func detectHeaderPattern(in text: String) -> HeaderDetectionResult {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         
+        // Headers should not end with sentence-ending punctuation
+        if hasSentenceEnding(trimmedText) {
+            return HeaderDetectionResult(isHeader: false)
+        }
+        
         // Check numbered headers
         for pattern in config.headerDetection.patterns.numberedHeaders {
             if let _ = trimmedText.range(of: pattern, options: .regularExpression) {
@@ -1136,11 +1141,47 @@ public class HeaderAndListDetector {
         // Check if next element doesn't start with dangerous patterns
         let startsWithDangerous = startsWithDangerousPattern(trimmedNext)
         
+        // Check if current element appears incomplete (doesn't end with sentence-ending punctuation)
+        // For non-header elements, if they don't end with sentence-ending punctuation, they're likely incomplete
+        let currentEndings = ["。", "；", "！", "？", ".", ";", "!", "?"]
+        let currentEndsWithCompletion = currentEndings.contains { trimmedCurrent.hasSuffix($0) }
+        
+        // Check if current element is a header (headers can end without punctuation)
+        let isCurrentHeader = current.type == .header
+        
+        // Current appears incomplete if it doesn't end with sentence punctuation AND it's not a header
+        let currentAppearsIncomplete = !currentEndsWithCompletion && !isCurrentHeader
+        
+        // Check if next element could logically continue the current sentence
+        // This includes cases where the next element starts with characters that could complete a word
+        let nextCouldContinue = !trimmedNext.isEmpty && !startsWithDangerous
+        
+        // Check for split Chinese words (common OCR issue)
+        let splitChineseWords = [
+            ("通", "过"), // 通过
+            ("的", "的"), // 的的 (duplicated)
+            ("了", "的"), // 了的
+            ("在", "的"), // 在的
+            ("有", "的"), // 有的
+            ("是", "的"), // 是的
+            ("和", "的"), // 和的
+            ("与", "的"), // 与的
+            ("或", "的"), // 或的
+            ("及", "的"), // 及的
+            ("等", "的"), // 等的
+        ]
+        
+        let isSplitChineseWord = splitChineseWords.contains { (currentEnd, nextStart) in
+            trimmedCurrent.hasSuffix(currentEnd) && trimmedNext.hasPrefix(nextStart)
+        }
+        
         // It's a sentence completion if:
         // 1. Next ends with completion punctuation, AND
         // 2. Next is short, AND
-        // 3. Next doesn't start with dangerous patterns
-        return nextEndsWithCompletion && nextIsShort && !startsWithDangerous
+        // 3. Next doesn't start with dangerous patterns, AND
+        // 4. Current appears incomplete, AND
+        // 5. Next could logically continue the sentence OR it's a split Chinese word
+        return nextEndsWithCompletion && nextIsShort && !startsWithDangerous && currentAppearsIncomplete && (nextCouldContinue || isSplitChineseWord)
     }
     
     /// Checks if text starts with dangerous patterns that indicate new content
@@ -2070,7 +2111,8 @@ public class HeaderAndListDetector {
     
     /// Checks if text ends with sentence punctuation
     private func hasSentenceEnding(_ text: String) -> Bool {
-        return text.hasSuffix(".") || text.hasSuffix("!") || text.hasSuffix("?")
+        let sentenceEndings = [".", "!", "?", "。", "！", "？", "；", ";"]
+        return sentenceEndings.contains { text.hasSuffix($0) }
     }
     
     /// Checks if text contains common header keywords

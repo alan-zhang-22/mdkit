@@ -2,7 +2,7 @@
   "processing": {
     "overlapThreshold": 0.15,
     "enableHeaderFooterDetection": true,
-    "pageHeaderRegion": [0.85, 1.0],
+    "pageHeaderRegion": [0.88, 1.0],
     "pageFooterRegion": [0.0, 0.082],
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.01,
@@ -224,11 +224,11 @@
     "patterns": {
       "numberedHeaders": [
         "^\\d+(?:\\.\\d+)*\\s",
-        "^\\d+(?:\\.\\d+)*[\\u4e00-\\u9fff]",
+        "^\\d+(?:\\.\\d+)*\\s+[\\u4e00-\\u9fff]",
         "^\\d+[A-Z](?:\\.\\d+)*\\s",
         "^第\\d+[章节]\\s",
         "^\\d+[、.．]\\s",
-        "^\\d+(?:\\.\\d+)*$"
+        "^\\d+(?:\\.\\d+)*\\s*$"
       ],
       "letteredHeaders": [
         "^[A-Z](?:\\.\\d+)*\\s",
