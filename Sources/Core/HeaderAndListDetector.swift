@@ -62,13 +62,15 @@ public struct PageHeaderContext {
     public let hasAppendixHeaders: Bool
     public let hasNamedHeaders: Bool
     public let headerSequence: [String]
+    public let headerNumberingByLevel: [Int: [String]]
     public let pageNumber: Int
     
-    public init(hasChapterHeaders: Bool = false, hasAppendixHeaders: Bool = false, hasNamedHeaders: Bool = false, headerSequence: [String] = [], pageNumber: Int = 0) {
+    public init(hasChapterHeaders: Bool = false, hasAppendixHeaders: Bool = false, hasNamedHeaders: Bool = false, headerSequence: [String] = [], headerNumberingByLevel: [Int: [String]] = [:], pageNumber: Int = 0) {
         self.hasChapterHeaders = hasChapterHeaders
         self.hasAppendixHeaders = hasAppendixHeaders
         self.hasNamedHeaders = hasNamedHeaders
         self.headerSequence = headerSequence
+        self.headerNumberingByLevel = headerNumberingByLevel
         self.pageNumber = pageNumber
     }
 }
@@ -187,7 +189,11 @@ public class HeaderAndListDetector {
             "提出了.*要求",
             "分别针对.*保护",
             "包含.*内容",
-            "涉及.*方面"
+            "涉及.*方面",
+            "界定的以及.*适用于",
+            "适用于.*文件",
+            "为了便于使用",
+            "重复列出了"
         ]
         
         let isLong = text.count > 30
@@ -195,7 +201,11 @@ public class HeaderAndListDetector {
             text.range(of: pattern, options: .regularExpression) != nil
         }
         
-        return isLong && containsDescriptivePhrases
+        // Check for year + descriptive text pattern (e.g., "2016 界定的以及...")
+        let yearDescriptivePattern = "^\\d{4}\\s+[\\u4e00-\\u9fff].*"
+        let isYearDescriptive = text.range(of: yearDescriptivePattern, options: .regularExpression) != nil
+        
+        return (isLong && containsDescriptivePhrases) || isYearDescriptive
     }
     
     /// Analyzes page structure to determine header context
@@ -223,11 +233,25 @@ public class HeaderAndListDetector {
         let headerSequence = potentialHeaders.compactMap { $0.text }
         let pageNumber = elements.first?.pageNumber ?? 0
         
+        // Extract header numbering sequences for each level
+        var headerNumberingByLevel: [Int: [String]] = [:]
+        for element in potentialHeaders {
+            if let text = element.text,
+               let headerLevel = element.headerLevel,
+               let marker = extractHeaderMarker(text) {
+                if headerNumberingByLevel[headerLevel] == nil {
+                    headerNumberingByLevel[headerLevel] = []
+                }
+                headerNumberingByLevel[headerLevel]?.append(marker)
+            }
+        }
+        
         return PageHeaderContext(
             hasChapterHeaders: hasChapterHeaders,
             hasAppendixHeaders: hasAppendixHeaders,
             hasNamedHeaders: hasNamedHeaders,
             headerSequence: headerSequence,
+            headerNumberingByLevel: headerNumberingByLevel,
             pageNumber: pageNumber
         )
     }
@@ -2844,6 +2868,12 @@ public class HeaderAndListDetector {
     
     /// Checks if a header is false based on page context
     private func isFalseHeaderInContext(_ text: String, pageContext: PageHeaderContext) -> Bool {
+        // Check if header numbering is misaligned with surrounding same-level headers
+        if isHeaderNumberingMisaligned(text, pageContext: pageContext) {
+            logger.debug("❌ Header numbering misaligned with context: '\(text)' on page \(pageContext.pageNumber)")
+            return true
+        }
+        
         // Check if this is a descriptive text that shouldn't be a header
         if isDescriptiveText(text) {
             logger.debug("❌ Descriptive text detected as header: '\(text)'")
@@ -2919,6 +2949,102 @@ public class HeaderAndListDetector {
             // Long text without sentence endings might be descriptive text, not a list item
             logger.debug("❌ Long descriptive text detected as list item: '\(text)'")
             return true
+        }
+        
+        return false
+    }
+    
+    /// Checks if header numbering is misaligned with surrounding same-level headers
+    private func isHeaderNumberingMisaligned(_ text: String, pageContext: PageHeaderContext) -> Bool {
+        guard let currentMarker = extractHeaderMarker(text) else { return false }
+        
+        // Check each header level for misalignment
+        for (level, markers) in pageContext.headerNumberingByLevel {
+            if markers.contains(currentMarker) {
+                // This marker exists in this level, check if it's consistent
+                let sortedMarkers = markers.sorted()
+                if let currentIndex = sortedMarkers.firstIndex(of: currentMarker) {
+                    // Check if this marker follows a logical sequence
+                    if currentIndex > 0 {
+                        let previousMarker = sortedMarkers[currentIndex - 1]
+                        if !isLogicalSequence(previousMarker, currentMarker) {
+                            logger.debug("❌ Header numbering misaligned: '\(previousMarker)' -> '\(currentMarker)'")
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        
+        return false
+    }
+    
+    /// Extracts the header marker (number, letter, etc.) from header text
+    private func extractHeaderMarker(_ text: String) -> String? {
+        // Pattern for numbered headers: "3", "3.1", "3.1.2", etc.
+        if let match = text.range(of: "^\\d+(?:\\.\\d+)*", options: .regularExpression) {
+            return String(text[match])
+        }
+        
+        // Pattern for lettered headers: "A", "A.1", "B", etc.
+        if let match = text.range(of: "^[A-Z](?:\\.\\d+)*", options: .regularExpression) {
+            return String(text[match])
+        }
+        
+        // Pattern for year-like markers: "2016", "2020", etc.
+        if let match = text.range(of: "^\\d{4}", options: .regularExpression) {
+            return String(text[match])
+        }
+        
+        return nil
+    }
+    
+    /// Checks if two header markers form a logical sequence
+    private func isLogicalSequence(_ previous: String, _ current: String) -> Bool {
+        // For numbered sequences: "3" -> "3.1", "3.1" -> "3.2", etc.
+        if previous.matches(pattern: "^\\d+(?:\\.\\d+)*$") && current.matches(pattern: "^\\d+(?:\\.\\d+)*$") {
+            // Check if current is a logical next in sequence
+            if current.hasPrefix(previous + ".") {
+                return true
+            }
+            
+            // Check if it's the same level but next number
+            if let prevNum = Int(previous), let currNum = Int(current) {
+                return currNum == prevNum + 1
+            }
+            
+            // Check for different levels: "3.18" -> "4" (subsection to new major section)
+            let prevDots = previous.filter { $0 == "." }.count
+            let currDots = current.filter { $0 == "." }.count
+            
+            // If previous has dots (like "3.18") and current doesn't (like "4"), 
+            // it's likely a new major section, which is valid
+            if prevDots > 0 && currDots == 0 {
+                if let prevMajor = Int(previous.components(separatedBy: ".").first ?? ""),
+                   let currMajor = Int(current) {
+                    return currMajor == prevMajor + 1
+                }
+            }
+        }
+        
+        // For lettered sequences: "A" -> "B", "A.1" -> "A.2", etc.
+        if previous.matches(pattern: "^[A-Z](?:\\.\\d+)*$") && current.matches(pattern: "^[A-Z](?:\\.\\d+)*$") {
+            if current.hasPrefix(previous + ".") {
+                return true
+            }
+            // Check if it's the same level but next letter
+            if previous.count == 1 && current.count == 1 {
+                let prevChar = previous.first!
+                let currChar = current.first!
+                return currChar.asciiValue == prevChar.asciiValue! + 1
+            }
+        }
+        
+        // For year sequences: "2016" -> "2017", etc.
+        if previous.matches(pattern: "^\\d{4}$") && current.matches(pattern: "^\\d{4}$") {
+            if let prevYear = Int(previous), let currYear = Int(current) {
+                return currYear == prevYear + 1
+            }
         }
         
         return false
