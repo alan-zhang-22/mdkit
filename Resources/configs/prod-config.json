@@ -3,7 +3,7 @@
     "overlapThreshold": 0.15,
     "enableHeaderFooterDetection": true,
     "pageHeaderRegion": [0.88, 1.0],
-    "pageFooterRegion": [0.0, 0.082],
+    "pageFooterRegion": [0.0, 0.085],
     "enableElementMerging": true,
     "mergeDistanceThreshold": 0.01,
     "isMergeDistanceNormalized": true,
@@ -228,7 +228,7 @@
       "numberedHeaders": [
         "^\\d+(?:\\.\\d+)*\\s",
         "^\\d+(?:\\.\\d+)*\\s+[\\u4e00-\\u9fff]",
-        "^\\d+[\\u4e00-\\u9fff]",
+        "^\\d+\\s+[\\u4e00-\\u9fff]{1,10}$",
         "^\\d+[A-Z](?:\\.\\d+)*\\s",
         "^第\\d+[章节]\\s",
         "^\\d+[、.．]\\s",

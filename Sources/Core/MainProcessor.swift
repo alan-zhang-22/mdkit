@@ -294,6 +294,14 @@ public class MainProcessor {
                 // Use MarkdownGenerator for markdown output, OutputGenerator for others
                 if outputType == .markdown {
                     let inputFilename = URL(fileURLWithPath: inputPath).lastPathComponent
+                    
+                    // Log element types before markdown generation in MainProcessor
+                    logger.info("🔍 MAINPROCESSOR - ELEMENT TYPES BEFORE MARKDOWN GENERATION:")
+                    for (index, element) in elements.enumerated() {
+                        let text = element.text?.prefix(30) ?? "no text"
+                        logger.info("  Element \(index): type=\(element.type), text='\(text)...'")
+                    }
+                    
                     output = try markdownGenerator.generateMarkdown(from: elements, inputFilename: inputFilename, blankPages: processingResult.blankPages, totalPagesProcessed: processingResult.totalPagesProcessed, totalPagesRequested: processingResult.totalPagesRequested)
                     logger.info("Generated markdown using MarkdownGenerator")
                 } else {

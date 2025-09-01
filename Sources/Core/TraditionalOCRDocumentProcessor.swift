@@ -135,7 +135,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 let currentPageElementsWithHeaderOptimization: [DocumentElement]
                 if !isCurrentPageTOC {
                     logger.info("Applying page-level header optimization on page \(pageNumber)")
-                    currentPageElementsWithHeaderOptimization = headerAndListDetector.optimizePageHeaders(currentPageElementsFinal)
+                    currentPageElementsWithHeaderOptimization = await headerAndListDetector.optimizePageHeaders(currentPageElementsFinal)
                 } else {
                     currentPageElementsWithHeaderOptimization = currentPageElementsFinal
                 }
@@ -545,7 +545,9 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             
             // Use HeaderAndListDetector for proper element type detection
             let elementType: DocumentElementType
-            let headerResult = headerAndListDetector.detectHeader(in: DocumentElement(
+            
+            // Create temporary element for detection
+            let tempElement = DocumentElement(
                 type: .paragraph,
                 boundingBox: boundingBox,
                 contentData: Data(),
@@ -553,7 +555,24 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 pageNumber: pageNumber,
                 text: text,
                 metadata: [:]
-            ))
+            )
+            
+            // Analyze page context for header alignment
+            let pageContext = headerAndListDetector.analyzePageHeaderContext(sortedObservations.enumerated().map { (idx, obs) in
+                let topCandidate = obs.topCandidates(1).first
+                return DocumentElement(
+                    type: .paragraph,
+                    boundingBox: obs.boundingBox,
+                    contentData: Data(),
+                    confidence: topCandidate?.confidence ?? 0.0,
+                    pageNumber: pageNumber,
+                    text: topCandidate?.string ?? "",
+                    metadata: [:]
+                )
+            })
+            
+            // Detect element type using context-aware header detection
+            let headerResult = headerAndListDetector.detectHeaderWithContext(in: tempElement, pageContext: pageContext)
             let listItemResult = headerAndListDetector.detectListItem(in: DocumentElement(
                 type: .paragraph,
                 boundingBox: boundingBox,

@@ -55,6 +55,24 @@ public struct ListItemDetectionResult {
     }
 }
 
+// MARK: - Page Header Context
+
+public struct PageHeaderContext {
+    public let hasChapterHeaders: Bool
+    public let hasAppendixHeaders: Bool
+    public let hasNamedHeaders: Bool
+    public let headerSequence: [String]
+    public let pageNumber: Int
+    
+    public init(hasChapterHeaders: Bool = false, hasAppendixHeaders: Bool = false, hasNamedHeaders: Bool = false, headerSequence: [String] = [], pageNumber: Int = 0) {
+        self.hasChapterHeaders = hasChapterHeaders
+        self.hasAppendixHeaders = hasAppendixHeaders
+        self.hasNamedHeaders = hasNamedHeaders
+        self.headerSequence = headerSequence
+        self.pageNumber = pageNumber
+    }
+}
+
 // MARK: - Header and List Detector
 
 public class HeaderAndListDetector {
@@ -97,6 +115,203 @@ public class HeaderAndListDetector {
         }
         
         return HeaderDetectionResult(isHeader: false)
+    }
+    
+    /// Detects if an element is a header with page-level context validation
+    public func detectHeaderWithContext(in element: DocumentElement, pageContext: PageHeaderContext) -> HeaderDetectionResult {
+        // First, do basic header detection
+        let basicResult = detectHeader(in: element)
+        
+        // If not detected as header, return early
+        guard basicResult.isHeader else {
+            return basicResult
+        }
+        
+        // Validate header in page context
+        if !validateHeaderInContext(element, pageContext) {
+            logger.debug("❌ Header misaligned with page context: '\(element.text ?? "")' on page \(pageContext.pageNumber)")
+            return HeaderDetectionResult(isHeader: false)
+        }
+        
+        return basicResult
+    }
+    
+    /// Validates if a header is consistent with the page context
+    private func validateHeaderInContext(_ element: DocumentElement, _ context: PageHeaderContext) -> Bool {
+        guard let text = element.text else { return false }
+        
+        // If we're in an appendix section, don't allow chapter headers
+        if context.hasAppendixHeaders && isChapterHeader(text) {
+            logger.debug("❌ Chapter header detected in appendix context: '\(text)'")
+            return false
+        }
+        
+        // If we're in a chapter section, don't allow appendix headers
+        if context.hasChapterHeaders && isAppendixHeader(text) {
+            logger.debug("❌ Appendix header detected in chapter context: '\(text)'")
+            return false
+        }
+        
+        // Check if it's descriptive text that shouldn't be a header
+        if isDescriptiveText(text) {
+            logger.debug("❌ Descriptive text detected as header: '\(text)'")
+            return false
+        }
+        
+        return true
+    }
+    
+    /// Helper method for string pattern matching
+    private func matches(_ text: String, _ pattern: String) -> Bool {
+        return text.range(of: pattern, options: .regularExpression) != nil
+    }
+    
+    /// Checks if text is a chapter header
+    private func isChapterHeader(_ text: String) -> Bool {
+        // Matches patterns like "5 网络安全等级保护概述", "6 第一级安全要求"
+        let pattern = "^\\d+\\s+[\\u4e00-\\u9fff]+$"
+        return text.range(of: pattern, options: .regularExpression) != nil
+    }
+    
+    /// Checks if text is an appendix header
+    private func isAppendixHeader(_ text: String) -> Bool {
+        // Matches patterns like "附录A", "附录B"
+        let pattern = "^附录[A-Z]"
+        return text.range(of: pattern, options: .regularExpression) != nil
+    }
+    
+    /// Checks if text is descriptive content that shouldn't be a header
+    private func isDescriptiveText(_ text: String) -> Bool {
+        // Long descriptive text that contains explanatory phrases
+        let descriptivePatterns = [
+            "提出了.*要求",
+            "分别针对.*保护",
+            "包含.*内容",
+            "涉及.*方面"
+        ]
+        
+        let isLong = text.count > 30
+        let containsDescriptivePhrases = descriptivePatterns.contains { pattern in
+            text.range(of: pattern, options: .regularExpression) != nil
+        }
+        
+        return isLong && containsDescriptivePhrases
+    }
+    
+    /// Analyzes page structure to determine header context
+    public func analyzePageHeaderContext(_ elements: [DocumentElement]) -> PageHeaderContext {
+        let potentialHeaders = elements.filter { element in
+            guard let text = element.text else { return false }
+            return detectHeaderPattern(in: text).isHeader
+        }
+        
+        let hasChapterHeaders = potentialHeaders.contains { element in
+            guard let text = element.text else { return false }
+            return isChapterHeader(text)
+        }
+        
+        let hasAppendixHeaders = potentialHeaders.contains { element in
+            guard let text = element.text else { return false }
+            return isAppendixHeader(text)
+        }
+        
+        let hasNamedHeaders = potentialHeaders.contains { element in
+            guard let text = element.text else { return false }
+            return matches(text, "^(前言|引言|参考文献)")
+        }
+        
+        let headerSequence = potentialHeaders.compactMap { $0.text }
+        let pageNumber = elements.first?.pageNumber ?? 0
+        
+        return PageHeaderContext(
+            hasChapterHeaders: hasChapterHeaders,
+            hasAppendixHeaders: hasAppendixHeaders,
+            hasNamedHeaders: hasNamedHeaders,
+            headerSequence: headerSequence,
+            pageNumber: pageNumber
+        )
+    }
+    
+    /// Processes misaligned headers by checking for multi-line optimization opportunities
+    public func processMisalignedHeader(_ misalignedElement: DocumentElement, adjacentElements: [DocumentElement]) -> [DocumentElement] {
+        logger.debug("🔄 Processing misaligned header for multi-line optimization: '\(misalignedElement.text ?? "")'")
+        
+        var processedElements: [DocumentElement] = []
+        var i = 0
+        
+        while i < adjacentElements.count {
+            let currentElement = adjacentElements[i]
+            
+            // If this is the misaligned header element, check for merge opportunities
+            if currentElement.id == misalignedElement.id {
+                // Check if we can merge with previous element
+                if i > 0 {
+                    let previousElement = adjacentElements[i - 1]
+                    if isSafeSentenceContinuation(previousElement, currentElement) {
+                        logger.debug("✅ Merging misaligned header with previous element")
+                        let mergedElement = mergeElements(previousElement, currentElement)
+                        processedElements.append(mergedElement)
+                        i += 1
+                        continue
+                    }
+                }
+                
+                // Check if we can merge with next element
+                if i + 1 < adjacentElements.count {
+                    let nextElement = adjacentElements[i + 1]
+                    if isSafeSentenceContinuation(currentElement, nextElement) {
+                        logger.debug("✅ Merging misaligned header with next element")
+                        let mergedElement = mergeElements(currentElement, nextElement)
+                        processedElements.append(mergedElement)
+                        i += 2
+                        continue
+                    }
+                }
+                
+                // If no merge possible, keep as paragraph
+                let paragraphElement = DocumentElement(
+                    id: currentElement.id,
+                    type: .paragraph,
+                    boundingBox: currentElement.boundingBox,
+                    contentData: currentElement.contentData,
+                    confidence: currentElement.confidence,
+                    pageNumber: currentElement.pageNumber,
+                    text: currentElement.text,
+                    metadata: currentElement.metadata,
+                    headerLevel: nil
+                )
+                processedElements.append(paragraphElement)
+            } else {
+                processedElements.append(currentElement)
+            }
+            
+            i += 1
+        }
+        
+        return processedElements
+    }
+    
+    /// Merges two elements into a single element
+    private func mergeElements(_ element1: DocumentElement, _ element2: DocumentElement) -> DocumentElement {
+        let mergedText = "\(element1.text ?? "")\(element2.text ?? "")"
+        let mergedBoundingBox = CGRect(
+            x: min(element1.boundingBox.minX, element2.boundingBox.minX),
+            y: min(element1.boundingBox.minY, element2.boundingBox.minY),
+            width: max(element1.boundingBox.maxX, element2.boundingBox.maxX) - min(element1.boundingBox.minX, element2.boundingBox.minX),
+            height: max(element1.boundingBox.maxY, element2.boundingBox.maxY) - min(element1.boundingBox.minY, element2.boundingBox.minY)
+        )
+        
+        return DocumentElement(
+            id: UUID(),
+            type: .paragraph,
+            boundingBox: mergedBoundingBox,
+            contentData: Data(),
+            confidence: min(element1.confidence, element2.confidence),
+            pageNumber: element1.pageNumber,
+            text: mergedText,
+            metadata: element1.metadata,
+            headerLevel: nil
+        )
     }
     
     /// Detects if a page is a TOC page based on its content characteristics
@@ -307,10 +522,10 @@ public class HeaderAndListDetector {
         
         // Fallback: return the text up to the first space or period
         if let spaceIndex = trimmedText.firstIndex(of: " ") {
-            return String(trimmedText[..<spaceIndex])
+            return Swift.String(trimmedText[..<spaceIndex])
         }
         if let periodIndex = trimmedText.firstIndex(of: ".") {
-            return String(trimmedText[...periodIndex])
+            return Swift.String(trimmedText[...periodIndex])
         }
         
         return trimmedText
@@ -999,50 +1214,13 @@ public class HeaderAndListDetector {
     
     /// Checks if an element is a header using configuration-based patterns
     private func isHeader(_ element: DocumentElement) -> Bool {
-        guard let text = element.text else { return false }
-        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // Use configuration-based header detection patterns
-        // Check numbered headers (e.g., "1 范围", "2 规范性引用文件", "8.1.4.3")
-        for pattern in config.headerDetection.patterns.numberedHeaders {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
-                if regex.firstMatch(in: trimmedText, range: range) != nil {
-                    return true
-                }
-            }
+        // First check if the element is actually classified as a header
+        if element.type == .header {
+            return true
         }
         
-        // Check lettered headers (e.g., "A.1", "甲", "乙")
-        for pattern in config.headerDetection.patterns.letteredHeaders {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
-                if regex.firstMatch(in: trimmedText, range: range) != nil {
-                    return true
-                }
-            }
-        }
-        
-        // Check Roman numeral headers (e.g., "I", "II", "一", "二")
-        for pattern in config.headerDetection.patterns.romanHeaders {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
-                if regex.firstMatch(in: trimmedText, range: range) != nil {
-                    return true
-                }
-            }
-        }
-        
-        // Check named headers (e.g., "Chapter 1", "附录 A", "第1章")
-        for pattern in config.headerDetection.patterns.namedHeaders {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
-                if regex.firstMatch(in: trimmedText, range: range) != nil {
-                    return true
-                }
-            }
-        }
-        
+        // If the element is not classified as a header, don't check text patterns
+        // This prevents false positives for converted elements
         return false
     }
     
@@ -1115,25 +1293,28 @@ public class HeaderAndListDetector {
         }
         
         // DANGEROUS: Don't merge if next element starts with header markers
-        // Use configuration-based header detection patterns
-        for pattern in config.headerDetection.patterns.numberedHeaders {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
-                if regex.firstMatch(in: trimmedNextText, range: range) != nil {
-                    logger.debug("❌ Next element starts with header marker: '\(trimmedNextText)'")
-                    return false // This is a NEW header, not a continuation
+        // BUT ONLY if the element is actually classified as a header
+        // If it's a paragraph, we should allow merging even if it starts with header-like patterns
+        if next.type == .header {
+            for pattern in config.headerDetection.patterns.numberedHeaders {
+                if let regex = try? NSRegularExpression(pattern: pattern) {
+                    let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
+                    if regex.firstMatch(in: trimmedNextText, range: range) != nil {
+                        logger.debug("❌ Next element is a header and starts with header marker: '\(trimmedNextText)'")
+                        return false // This is a NEW header, not a continuation
+                    }
                 }
             }
-        }
-        
-        // Additional check for merged header patterns (e.g., "5.1等级保护对象3")
-        // Check if the text starts with a number followed by a dot and another number
-        let mergedHeaderPattern = "^\\d+\\.\\d+"
-        if let regex = try? NSRegularExpression(pattern: mergedHeaderPattern) {
-            let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
-            if regex.firstMatch(in: trimmedNextText, range: range) != nil {
-                logger.debug("❌ Next element starts with merged header pattern: '\(trimmedNextText)'")
-                return false // This is a NEW header, not a continuation
+            
+            // Additional check for merged header patterns (e.g., "5.1等级保护对象3")
+            // Check if the text starts with a number followed by a dot and another number
+            let mergedHeaderPattern = "^\\d+\\.\\d+"
+            if let regex = try? NSRegularExpression(pattern: mergedHeaderPattern) {
+                let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
+                if regex.firstMatch(in: trimmedNextText, range: range) != nil {
+                    logger.debug("❌ Next element is a header and starts with merged header pattern: '\(trimmedNextText)'")
+                    return false // This is a NEW header, not a continuation
+                }
             }
         }
         
@@ -1220,21 +1401,29 @@ public class HeaderAndListDetector {
             }
         }
         
-        // Check for header markers that indicate new content
-        for pattern in config.headerDetection.patterns.numberedHeaders {
-            if let regex = try? NSRegularExpression(pattern: pattern) {
-                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
-                if regex.firstMatch(in: trimmedText, range: range) != nil {
-                    return true
-                }
-            }
-        }
-        
         // Check for specific phrases that introduce new lists
         let dangerousPhrases = ["本项要求包括："]
         for phrase in dangerousPhrases {
             if trimmedText.hasPrefix(phrase) {
                 return true
+            }
+        }
+        
+        // Check for header markers that indicate new content
+        // But be more lenient with patterns that might be part of a sentence
+        for pattern in config.headerDetection.patterns.numberedHeaders {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+                if regex.firstMatch(in: trimmedText, range: range) != nil {
+                    // Additional check: if the text is long, it might be part of a sentence
+                    // rather than a standalone header
+                    if trimmedText.count > 30 {
+                        // Long text starting with header pattern might be descriptive text
+                        // that should be merged, not a standalone header
+                        continue
+                    }
+                    return true
+                }
             }
         }
         
@@ -2356,8 +2545,9 @@ public class HeaderAndListDetector {
     
     // MARK: - Page-Level Header Optimization
     
-    /// Optimizes headers on a page by analyzing numbering consistency and filtering false positives
-    public func optimizePageHeaders(_ elements: [DocumentElement]) -> [DocumentElement] {
+    /// Optimizes headers and list items on a page by analyzing alignment and filtering false positives
+    /// This is the main entry point for page-level alignment checking
+    public func optimizePageHeaders(_ elements: [DocumentElement]) async -> [DocumentElement] {
         guard !elements.isEmpty else { return elements }
         
         // Group elements by page number
@@ -2366,34 +2556,112 @@ public class HeaderAndListDetector {
         var optimizedElements: [DocumentElement] = []
         
         for (pageNumber, pageElements) in pageGroups.sorted(by: { $0.key < $1.key }) {
-            let optimizedPageElements = optimizeHeadersOnPage(pageElements, pageNumber: pageNumber)
+            let optimizedPageElements = await optimizePageElementsWithAlignmentChecking(pageElements, pageNumber: pageNumber)
             optimizedElements.append(contentsOf: optimizedPageElements)
         }
         
         return optimizedElements
     }
     
+    /// Comprehensive page-level alignment checking for both headers and list items
+    /// This method identifies false headers and list items and converts them to paragraphs
+    private func optimizePageElementsWithAlignmentChecking(_ elements: [DocumentElement], pageNumber: Int) async -> [DocumentElement] {
+        logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Page \(pageNumber): Starting with \(elements.count) elements")
+        
+        // Step 1: Analyze page context for header alignment
+        let pageContext = analyzePageHeaderContext(elements)
+        logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Page \(pageNumber): Page context analyzed")
+        
+        // Step 2: Identify and convert false headers
+        var optimizedElements = elements
+        var hasFalseHeaderConversion = false
+        
+        for (index, element) in optimizedElements.enumerated() {
+            if element.type == .header {
+                // Check if this is a false header using context-aware detection
+                if let text = element.text, isFalseHeaderInContext(text, pageContext: pageContext) {
+                    logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Converting false header to paragraph: '\(text)'")
+                    optimizedElements[index] = DocumentElement(
+                        id: element.id,
+                        type: .paragraph,
+                        boundingBox: element.boundingBox,
+                        contentData: element.contentData,
+                        confidence: element.confidence,
+                        pageNumber: element.pageNumber,
+                        text: element.text,
+                        metadata: element.metadata,
+                        headerLevel: nil
+                    )
+                    hasFalseHeaderConversion = true
+                }
+            }
+        }
+        
+        // Step 3: Identify and convert false list items
+        var hasFalseListItemConversion = false
+        
+        for (index, element) in optimizedElements.enumerated() {
+            if element.type == .listItem {
+                // Check if this is a false list item using context-aware detection
+                if let text = element.text, isFalseListItemInContext(text, pageContext: pageContext) {
+                    logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Converting false list item to paragraph: '\(text)'")
+                    optimizedElements[index] = DocumentElement(
+                        id: element.id,
+                        type: .paragraph,
+                        boundingBox: element.boundingBox,
+                        contentData: element.contentData,
+                        confidence: element.confidence,
+                        pageNumber: element.pageNumber,
+                        text: element.text,
+                        metadata: element.metadata,
+                        headerLevel: nil
+                    )
+                    hasFalseListItemConversion = true
+                }
+            }
+        }
+        
+        // Step 4: Run multi-line optimization if any conversions were made
+        if hasFalseHeaderConversion || hasFalseListItemConversion {
+            logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Running multi-line optimization after alignment corrections on page \(pageNumber)")
+            optimizedElements = await mergeSplitSentencesConservative(optimizedElements)
+        }
+        
+        logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Page \(pageNumber): Completed with \(optimizedElements.count) elements")
+        return optimizedElements
+    }
+    
     /// Optimizes headers on a single page by analyzing numbering patterns
-    private func optimizeHeadersOnPage(_ elements: [DocumentElement], pageNumber: Int) -> [DocumentElement] {
+    private func optimizeHeadersOnPage(_ elements: [DocumentElement], pageNumber: Int) async -> [DocumentElement] {
+        logger.info("🔍 OPTIMIZE PAGE HEADERS - Page \(pageNumber): Starting with \(elements.count) elements")
+        
         // Extract headers from the page
         let headers = elements.filter { $0.type == .header }
         
+        logger.info("🔍 OPTIMIZE PAGE HEADERS - Page \(pageNumber): Found \(headers.count) headers")
+        for (index, header) in headers.enumerated() {
+            logger.info("  Header \(index): '\(header.text ?? "")'")
+        }
+        
         guard headers.count > 1 else { return elements }
         
-        // Analyze header numbering patterns
-        let headerAnalysis = analyzeHeaderNumbering(headers)
+        // Create page context for context-aware header validation
+        let pageContext = analyzePageHeaderContext(elements)
         
-        // Filter out false headers and identify missing ones
-        let optimizedHeaders = filterFalseHeaders(headers, analysis: headerAnalysis)
+        // Filter out false headers using context-aware detection
+        let optimizedHeaders = filterFalseHeadersWithContext(headers, pageContext: pageContext)
         
         // Replace headers in the original elements
         var optimizedElements = elements
+        var hasFalseHeaderConversion = false
+        
         for (index, element) in optimizedElements.enumerated() {
             if element.type == .header {
                 if let optimizedHeader = optimizedHeaders.first(where: { $0.id == element.id }) {
                     optimizedElements[index] = optimizedHeader
                 } else {
                     // Convert false header back to paragraph
+                    logger.info("🔍 OPTIMIZE PAGE HEADERS - Converting false header to paragraph: '\(element.text ?? "")'")
                     optimizedElements[index] = DocumentElement(
                         id: element.id,
                         type: .paragraph,
@@ -2406,8 +2674,15 @@ public class HeaderAndListDetector {
                         headerLevel: nil
                     )
                     logger.info("Converted false header to paragraph on page \(pageNumber): '\(element.text ?? "")'")
+                    hasFalseHeaderConversion = true
                 }
             }
+        }
+        
+        // If we converted any false headers to paragraphs, run multi-line optimization again
+        if hasFalseHeaderConversion {
+            logger.info("🔍 OPTIMIZE PAGE HEADERS - Running multi-line optimization after false header conversion on page \(pageNumber)")
+            optimizedElements = await mergeSplitSentencesConservative(optimizedElements)
         }
         
         return optimizedElements
@@ -2546,6 +2821,107 @@ public class HeaderAndListDetector {
         }
         
         return outliers
+    }
+    
+    /// Filters out false headers based on context-aware analysis
+    private func filterFalseHeadersWithContext(_ headers: [DocumentElement], pageContext: PageHeaderContext) -> [DocumentElement] {
+        var filteredHeaders = headers
+        
+        for header in headers {
+            guard let text = header.text else { continue }
+            
+            // Use the same context-aware logic as detectHeaderWithContext
+            let isFalseHeader = isFalseHeaderInContext(text, pageContext: pageContext)
+            
+            if isFalseHeader {
+                logger.info("🔍 OPTIMIZE PAGE HEADERS - Identified false header using context-aware detection: '\(text)'")
+                filteredHeaders.removeAll { $0.id == header.id }
+            }
+        }
+        
+        return filteredHeaders
+    }
+    
+    /// Checks if a header is false based on page context
+    private func isFalseHeaderInContext(_ text: String, pageContext: PageHeaderContext) -> Bool {
+        // Check if this is a descriptive text that shouldn't be a header
+        if isDescriptiveText(text) {
+            logger.debug("❌ Descriptive text detected as header: '\(text)'")
+            return true
+        }
+        
+        // Check if header is misaligned with page context
+        if isHeaderMisalignedWithContext(text, pageContext: pageContext) {
+            logger.debug("❌ Header misaligned with page context: '\(text)' on page \(pageContext.pageNumber)")
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Checks if a list item is false based on page context
+    private func isFalseListItemInContext(_ text: String, pageContext: PageHeaderContext) -> Bool {
+        // Check if this is a descriptive text that shouldn't be a list item
+        if isDescriptiveText(text) {
+            logger.debug("❌ Descriptive text detected as list item: '\(text)'")
+            return true
+        }
+        
+        // Check if list item is misaligned with page context
+        if isListItemMisalignedWithContext(text, pageContext: pageContext) {
+            logger.debug("❌ List item misaligned with page context: '\(text)' on page \(pageContext.pageNumber)")
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Checks if a header is misaligned with the page context
+    private func isHeaderMisalignedWithContext(_ text: String, pageContext: PageHeaderContext) -> Bool {
+        // Check for appendix context
+        if pageContext.hasAppendixHeaders {
+            // If we have appendix headers, check if this looks like a chapter header
+            if matches(text, "^\\d+\\s+章") {
+                logger.debug("❌ Chapter header detected in appendix context: '\(text)'")
+                return true
+            }
+        }
+        
+        // Check for chapter context
+        if pageContext.hasChapterHeaders {
+            // If we have chapter headers, check if this looks like an appendix header
+            if matches(text, "^附录[ABCDEFGHIJKLMNOPQRSTUVWXYZ]") {
+                logger.debug("❌ Appendix header detected in chapter context: '\(text)'")
+                return true
+            }
+        }
+        
+        // Check for named headers context
+        if pageContext.hasNamedHeaders {
+            // If we have named headers, check if this looks like a numbered header
+            if matches(text, "^\\d+\\s+[\\u4e00-\\u9fff]") {
+                logger.debug("❌ Numbered header detected in named header context: '\(text)'")
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    /// Checks if a list item is misaligned with the page context
+    private func isListItemMisalignedWithContext(_ text: String, pageContext: PageHeaderContext) -> Bool {
+        // Check if this is a descriptive text that looks like a list item but isn't
+        // For example, text that starts with letters/numbers but is actually part of a sentence
+        
+        // Check if this is a standalone list item without proper context
+        // This is a simplified check - in practice, you might want more sophisticated logic
+        if text.count > 50 && !text.contains("。") && !text.contains(".") {
+            // Long text without sentence endings might be descriptive text, not a list item
+            logger.debug("❌ Long descriptive text detected as list item: '\(text)'")
+            return true
+        }
+        
+        return false
     }
     
     /// Filters out false headers based on numbering analysis

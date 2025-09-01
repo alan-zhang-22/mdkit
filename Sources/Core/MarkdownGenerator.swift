@@ -100,6 +100,13 @@ public final class MarkdownGenerator: Sendable {
         // Detect TOC pages and convert headers to TOC items during markdown generation
         let elementsWithTOCConversion = convertHeadersToTOCItemsIfNeeded(sortedElements)
         
+        // Log element types before markdown generation
+        logger.info("📋 ELEMENT TYPES BEFORE MARKDOWN GENERATION:")
+        for (index, element) in elementsWithTOCConversion.enumerated() {
+            let text = element.text?.prefix(30) ?? "no text"
+            logger.info("  Element \(index): type=\(element.type), text='\(text)...'")
+        }
+        
         // Process each element
         for (index, element) in elementsWithTOCConversion.enumerated() {
             let elementMarkdown = try generateMarkdownForElement(element, at: index, in: elementsWithTOCConversion)
@@ -139,6 +146,9 @@ public final class MarkdownGenerator: Sendable {
         }
         
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Add detailed logging to track element types during markdown generation
+        logger.debug("🔍 MARKDOWN GENERATION - Element \(index): type=\(element.type), text='\(trimmedText.prefix(50))...'")
         
         switch element.type {
         case .title:
