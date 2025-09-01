@@ -68,10 +68,12 @@ let package = Package(
         
 
         
-        // MARK: - Configuration (no external dependencies)
+        // MARK: - Configuration (depends on Logging)
         .target(
             name: "mdkitConfiguration",
-            dependencies: [],
+            dependencies: [
+                .product(name: "Logging", package: "swift-log")
+            ],
             path: "Sources/Configuration"
         ),
         

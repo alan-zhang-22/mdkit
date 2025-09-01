@@ -890,6 +890,7 @@ public class HeaderAndListDetector {
     
     /// Merges split sentences that span multiple lines (conservative approach)
     /// Only merges when confident it's a sentence continuation, not a new list/header
+    /// Uses iterative merging to handle multiple consecutive merges
     public func mergeSplitSentencesConservative(_ elements: [DocumentElement]) async -> [DocumentElement] {
         guard elements.count > 1 else { return elements }
         
@@ -923,9 +924,38 @@ public class HeaderAndListDetector {
                             metadata: currentElement.metadata
                         )
                         
-                        mergedElements.append(merged)
-                        logger.debug("✅ Successfully merged: '\(mergedText)'")
-                        i += 2 // Skip both elements
+                        // ITERATIVE MERGING: Check if the merged result should be further merged
+                        var finalMerged = merged
+                        var mergeIndex = i + 2 // Start checking from the element after the next one
+                        
+                        while mergeIndex < elements.count {
+                            let nextCandidate = elements[mergeIndex]
+                            
+                            // Check if the merged result is still incomplete and the next candidate is safe to merge
+                            if isIncompleteSentence(finalMerged) && isSafeSentenceContinuation(finalMerged, nextCandidate) {
+                                let newMergedText = (finalMerged.text ?? "") + (nextCandidate.text ?? "")
+                                let newMergedBoundingBox = finalMerged.boundingBox.union(nextCandidate.boundingBox)
+                                
+                                finalMerged = DocumentElement(
+                                    type: finalMerged.type,
+                                    boundingBox: newMergedBoundingBox,
+                                    contentData: Data(),
+                                    confidence: (finalMerged.confidence + nextCandidate.confidence) / 2,
+                                    pageNumber: finalMerged.pageNumber,
+                                    text: newMergedText,
+                                    metadata: finalMerged.metadata
+                                )
+                                
+                                logger.debug("✅ Iterative merge: '\(newMergedText)'")
+                                mergeIndex += 1
+                            } else {
+                                break // Stop merging when we can't merge anymore
+                            }
+                        }
+                        
+                        mergedElements.append(finalMerged)
+                        logger.debug("✅ Successfully merged: '\(finalMerged.text ?? "")'")
+                        i = mergeIndex // Skip all elements that were merged
                         continue
                     } else {
                         logger.debug("❌ Rejected merge: '\(currentElement.text ?? "")' + '\(nextElement.text ?? "")'")
@@ -1029,7 +1059,15 @@ public class HeaderAndListDetector {
                 return false 
             }
             
+            // FIRST: Check if this looks like a sentence completion (including split Chinese words)
+            // This takes priority over right edge checks
+            if isSentenceCompletion(current, next) {
+                logger.debug("✅ Sentence completion detected (early check)")
+                return true
+            }
+            
             // NEW: Check if current element ends far from the right edge (indicating a complete sentence)
+            // But only if it's not a split Chinese word
             let currentMaxX = current.boundingBox.maxX
             let rightEdgeThreshold: CGFloat = 0.7 // If element ends before 70% of page width, it's likely complete
             if currentMaxX < rightEdgeThreshold {
@@ -1046,6 +1084,13 @@ public class HeaderAndListDetector {
             return false 
         }
         let trimmedNextText = nextText.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // CRITICAL: Check if next element is a header BEFORE any other checks
+        // This prevents merging headers with previous text
+        if isHeader(next) {
+            logger.debug("❌ Next element is a header: '\(trimmedNextText)'")
+            return false // This is a NEW header, not a continuation
+        }
         
         // DANGEROUS: Don't merge if next element starts with list markers
         // Use configuration-based list detection patterns
@@ -1101,11 +1146,7 @@ public class HeaderAndListDetector {
         // POSITIVE CONFIRMATION: Check if this looks like a sentence completion
         // This is the key improvement - actively confirm it's safe to merge
         
-        // Check if the continuation completes the sentence logically
-        if isSentenceCompletion(current, next) {
-            logger.debug("✅ Sentence completion detected")
-            return true
-        }
+        // Note: Sentence completion check moved to earlier in the function for priority
         
         // Check if the continuation is very short and doesn't start with dangerous patterns
         if trimmedNextText.count <= 15 && !startsWithDangerousPattern(trimmedNextText) {
@@ -1156,32 +1197,13 @@ public class HeaderAndListDetector {
         // This includes cases where the next element starts with characters that could complete a word
         let nextCouldContinue = !trimmedNext.isEmpty && !startsWithDangerous
         
-        // Check for split Chinese words (common OCR issue)
-        let splitChineseWords = [
-            ("通", "过"), // 通过
-            ("的", "的"), // 的的 (duplicated)
-            ("了", "的"), // 了的
-            ("在", "的"), // 在的
-            ("有", "的"), // 有的
-            ("是", "的"), // 是的
-            ("和", "的"), // 和的
-            ("与", "的"), // 与的
-            ("或", "的"), // 或的
-            ("及", "的"), // 及的
-            ("等", "的"), // 等的
-        ]
-        
-        let isSplitChineseWord = splitChineseWords.contains { (currentEnd, nextStart) in
-            trimmedCurrent.hasSuffix(currentEnd) && trimmedNext.hasPrefix(nextStart)
-        }
-        
         // It's a sentence completion if:
         // 1. Next ends with completion punctuation, AND
         // 2. Next is short, AND
         // 3. Next doesn't start with dangerous patterns, AND
         // 4. Current appears incomplete, AND
-        // 5. Next could logically continue the sentence OR it's a split Chinese word
-        return nextEndsWithCompletion && nextIsShort && !startsWithDangerous && currentAppearsIncomplete && (nextCouldContinue || isSplitChineseWord)
+        // 5. Next could logically continue the sentence
+        return nextEndsWithCompletion && nextIsShort && !startsWithDangerous && currentAppearsIncomplete && nextCouldContinue
     }
     
     /// Checks if text starts with dangerous patterns that indicate new content

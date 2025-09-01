@@ -517,7 +517,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         
         // Sort observations by Y-coordinate (top to bottom) for logical reading order
         let sortedObservations = observations.sorted { obs1, obs2 in
-            // Use the top edge (minY) for sorting, with smaller Y values first (top of page)
+            // Use the top edge (minY) for sorting, with larger Y values first (top of page)
+            // In Vision framework: Y=0 is bottom, Y=1 is top, so we want larger Y first
             return obs1.boundingBox.minY > obs2.boundingBox.minY
         }
         
@@ -529,7 +530,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 continue 
             }
             
-            let text = topCandidate.string
+            var text = topCandidate.string
             let confidence = topCandidate.confidence
             let boundingBox = observation.boundingBox
             
@@ -565,6 +566,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             
             if headerResult.isHeader {
                 elementType = .header
+                // Normalize header text to ensure consistent format: <marker> + space + <content>
+                text = normalizeHeaderText(text)
             } else if listItemResult.isListItem {
                 elementType = .listItem
             } else {
@@ -659,6 +662,39 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         }
         
         return false
+    }
+    
+    /// Normalizes header text to ensure consistent format: <marker> + space + <content>
+    /// Examples:
+    /// - "4缩略语" -> "4 缩略语"
+    /// - "3.17感知网关节点设备" -> "3.17 感知网关节点设备"
+    /// - "5.1等级保护对象" -> "5.1 等级保护对象"
+    private func normalizeHeaderText(_ text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Pattern to match numbered headers without space after the number
+        // Matches: digit(s) + optional dots + Chinese characters
+        let pattern = "^(\\d+(?:\\.\\d+)*)([\\u4e00-\\u9fff]+.*)$"
+        
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+           let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+            
+            let markerRange = match.range(at: 1)
+            let contentRange = match.range(at: 2)
+            
+            if let markerNSRange = Range(markerRange, in: trimmedText),
+               let contentNSRange = Range(contentRange, in: trimmedText) {
+                
+                let marker = String(trimmedText[markerNSRange])
+                let content = String(trimmedText[contentNSRange])
+                
+                // Return normalized format: <marker> + space + <content>
+                return "\(marker) \(content)"
+            }
+        }
+        
+        // If no pattern match, return original text
+        return trimmedText
     }
     
     private func mergeElements(_ element1: DocumentElement, _ element2: DocumentElement) -> DocumentElement {
