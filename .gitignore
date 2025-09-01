@@ -51,6 +51,12 @@ output/
 logs/
 temp/
 
+# Generated output directories
+dev-output/
+dev-logs/
+dev-temp/
+dev-markdown/
+
 # Configuration files with sensitive data
 config.local.json
 .env

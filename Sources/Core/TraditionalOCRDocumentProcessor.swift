@@ -72,25 +72,110 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 let pageImageData = try await extractPDFPageAsImage(documentPath: documentPath, pageNumber: pageNumber)
                 let currentPageElements = try await processDocument(from: pageImageData, pageNumber: pageNumber, pageRange: pageRange)
                 
-                // NEW: Cross-page sentence optimization
+                // Step 1: Check if page has content to process (FIRST!)
+                if currentPageElements.isEmpty {
+                    logger.info("Page \(pageNumber) has no elements - skipping processing")
+                    if let previousElements = previousPageElements {
+                        allElements.append(contentsOf: previousElements)
+                        previousPageElements = []
+                    }
+                    continue
+                }
+                
+                // Step 2: Sort by position (within current page)
+                let currentPageElementsSorted = sortElementsByPosition(currentPageElements)
+                
+                // Step 3: Apply same-line merging (with sorted elements) - MOVED HERE
+                // Detect language for this page to determine spacing behavior
+                let pageLanguage = (try? detectLanguage(from: currentPageElementsSorted)) ?? "en"
+                let currentPageElementsWithSameLineMerged = await headerAndListDetector.mergeSameLineElements(currentPageElementsSorted, language: pageLanguage)
+                
+                // Step 3.5: Re-detect headers after same-line merging
+                let currentPageElementsWithHeadersRedetected = currentPageElementsWithSameLineMerged.map { element in
+                    let headerResult = headerAndListDetector.detectHeader(in: element)
+                    if headerResult.isHeader {
+                        return DocumentElement(
+                            type: .header,
+                            boundingBox: element.boundingBox,
+                            contentData: element.contentData,
+                            confidence: element.confidence,
+                            pageNumber: element.pageNumber,
+                            text: element.text,
+                            metadata: element.metadata,
+                            headerLevel: headerResult.level
+                        )
+                    } else {
+                        return element
+                    }
+                }
+                
+                // Step 4: TOC Detection (BEFORE cross-page optimization)
+                let currentPageHeaderRatio = calculateHeaderRatio(currentPageElementsWithHeadersRedetected)
+                let isCurrentPageTOC = currentPageHeaderRatio >= 0.9 && currentPageElementsWithHeadersRedetected.count >= 3
+                
+                // Step 4.5: Use headers as they are - TOC conversion will happen during markdown generation
+                let currentPageElementsFinal = currentPageElementsWithHeadersRedetected
+                
+                // Step 4.6: Also check if the previous page was a TOC page to prevent cross-page optimization
+                let isPreviousPageTOC: Bool
                 if let previousElements = previousPageElements {
-                    logger.info("Applying cross-page sentence optimization between page \(pagesToProcess[index - 1]) and page \(pageNumber)")
-                    
-                    let (optimizedPreviousPage, optimizedCurrentPage) = try await headerAndListDetector.optimizeCrossPageSentences(
-                        currentPage: previousElements,
-                        nextPage: currentPageElements,
-                        currentPageNumber: pagesToProcess[index - 1],
-                        nextPageNumber: pageNumber
-                    )
-                    
-                    // Add optimized previous page elements
-                    allElements.append(contentsOf: optimizedPreviousPage)
-                    
-                    // Update current page elements for next iteration
-                    previousPageElements = optimizedCurrentPage
+                    let previousPageHeaderRatio = calculateHeaderRatio(previousElements)
+                    isPreviousPageTOC = previousPageHeaderRatio >= 0.9 && previousElements.count >= 3
                 } else {
-                    // First page - no cross-page optimization needed
-                    previousPageElements = currentPageElements
+                    isPreviousPageTOC = false
+                }
+                
+                if isCurrentPageTOC {
+                    logger.info("Page \(pageNumber) identified as TOC page (header ratio: \(String(format: "%.1f", currentPageHeaderRatio * 100))%) - will skip cross-page optimization")
+                }
+                
+                // Step 5: Cross-page sentence optimization (TOC-aware, with merged and sorted elements)
+                if let previousElements = previousPageElements {
+                    // Additional check: Skip cross-page optimization if last element is far from bottom
+                    let shouldSkipCrossPageOptimization = shouldSkipCrossPageOptimization(previousElements: previousElements)
+                    
+                    // Skip cross-page optimization if either page is TOC or if last element is far from bottom
+                    if isCurrentPageTOC || isPreviousPageTOC || shouldSkipCrossPageOptimization {
+                        let reason = isCurrentPageTOC ? "current page is TOC" : (isPreviousPageTOC ? "previous page is TOC" : "last element far from bottom")
+                        logger.info("Skipping cross-page optimization - \(reason)")
+                        
+                        // Store previous page elements without cross-page optimization
+                        let finalPreviousPage = await headerAndListDetector.mergeSplitSentencesConservative(previousElements)
+                        let normalizedPreviousPage = headerAndListDetector.normalizeAllListItems(finalPreviousPage)
+                        allElements.append(contentsOf: normalizedPreviousPage)
+                        
+                        // Apply multi-line merging and normalization to current page
+                        let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsFinal)
+                        previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                    } else {
+                        // Only run cross-page optimization if neither page is a TOC page
+                        // This ensures TOC pages are never affected by cross-page optimization
+                        let (optimizedPreviousPage, optimizedCurrentPage) = try await headerAndListDetector.optimizeCrossPageSentences(
+                            currentPage: previousElements,
+                            nextPage: currentPageElementsWithHeadersRedetected,
+                            currentPageNumber: pagesToProcess[index - 1],
+                            nextPageNumber: pageNumber
+                        )
+                        
+                        // Step 6: Multi-line merging for previous page
+                        let finalPreviousPage = await headerAndListDetector.mergeSplitSentencesConservative(optimizedPreviousPage)
+                        
+                        // Step 7: Normalize list items for previous page
+                        let normalizedPreviousPage = headerAndListDetector.normalizeAllListItems(finalPreviousPage)
+                        
+                        // Step 8: Store previous page elements
+                        allElements.append(contentsOf: normalizedPreviousPage)
+                        
+                        // Step 9: Multi-line merging for current page
+                        let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(optimizedCurrentPage)
+                        
+                        // Step 10: Normalize list items for current page
+                        previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                    }
+                } else {
+                    // First page - apply multi-line merging and normalization
+                    let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsFinal)
+                    previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
                 }
             } else {
                 // For non-PDF documents, process as single image
@@ -108,11 +193,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         
         logger.info("Successfully processed document with cross-page optimization, extracted \(allElements.count) elements")
         
-        // Post-process elements
-        let processedElements = try await postProcessElements(allElements)
-        
         return DocumentProcessingResult(
-            elements: processedElements,
+            elements: allElements,
             blankPages: [],
             totalPagesProcessed: pagesToProcess.count,
             totalPagesRequested: pagesToProcess.count
@@ -210,17 +292,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         // Convert observations to document elements
         let elements = try convertObservationsToElements(filteredObservations, pageNumber: pageNumber)
         
-        // Check if page has content to process
-        if elements.isEmpty {
-            logger.info("Page \(pageNumber) has no content - skipping post-processing")
-            return []
-        }
-        
-        // Post-process elements
-        let processedElements = try await postProcessElements(elements)
-        
-        logger.info("Document processing completed, generated \(processedElements.count) elements")
-        return processedElements
+        logger.info("Document processing completed, generated \(elements.count) elements")
+        return elements
     }
     
     public func getDocumentInfo(at documentPath: String) async throws -> DocumentInfo {
@@ -288,12 +361,6 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     public func detectLanguage(from elements: [DocumentElement]) throws -> String {
         logger.info("Detecting language from \(elements.count) elements")
         
-        // Handle empty elements gracefully
-        if elements.isEmpty {
-            logger.info("No elements provided for language detection - using default language 'en'")
-            return "en"
-        }
-        
         // Try to detect language from the original PDF text first (if available)
         if let pdfText = try? extractTextFromPDFPage() {
             logger.info("=== PDF TEXT EXTRACTION SUCCESSFUL ===")
@@ -336,8 +403,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         }
         
         if allText.isEmpty {
-            logger.info("No text content found in elements - using default language 'en'")
-            return "en"
+            throw mdkitProtocols.DocumentProcessingError.languageDetectionFailed("No text content to analyze")
         }
         
         logger.info("=== COMBINED TEXT FOR LANGUAGE DETECTION ===")
@@ -358,45 +424,9 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     }
     
     public func mergeSplitElements(_ elements: [DocumentElement], language: String) async throws -> [DocumentElement] {
-        logger.info("Merging split elements for language: \(language)")
-        
-        // PHASE 1: Same-line merging (merge elements on the same line horizontally)
-        let elementsWithSameLineMerged = await headerAndListDetector.mergeSameLineElements(elements)
-        
-        // EARLY TOC DETECTION: Analyze TOC pages right after same-line merge
-        let (tocProcessedElements, tocPages) = detectTOCPages(elementsWithSameLineMerged)
-        
-        // PHASE 2: Conservative split sentence merging (merge incomplete sentences across lines)
-        // Skip multi-line merging for TOC pages to preserve their structure
-        let elementsWithSentencesMerged = await mergeSplitSentencesConditionally(tocProcessedElements, tocPages: tocPages)
-        
-        // Then apply the traditional proximity-based merging for other elements
-        let sortedElements = sortElementsByPosition(elementsWithSentencesMerged)
-        var mergedElements: [DocumentElement] = []
-        var currentElement: DocumentElement?
-        
-        for element in sortedElements {
-            if let current = currentElement {
-                // Check if elements should be merged based on proximity and content
-                if shouldMergeElements(current, element, language: language) {
-                    let merged = mergeElements(current, element)
-                    currentElement = merged
-                } else {
-                    mergedElements.append(current)
-                    currentElement = element
-                }
-            } else {
-                currentElement = element
-            }
-        }
-        
-        // Add the last element
-        if let last = currentElement {
-            mergedElements.append(last)
-        }
-        
-        logger.info("Element merging completed: \(elements.count) -> \(mergedElements.count)")
-        return mergedElements
+        logger.info("Legacy mergeSplitElements method called - all processing now done in page-by-page pipeline")
+        // This method is deprecated - all processing is now done in the page-by-page pipeline
+        return elements
     }
     
     public func removeDuplicates(from elements: [DocumentElement]) throws -> (elements: [DocumentElement], duplicatesRemoved: Int) {
@@ -572,32 +602,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     
 
     
-    private func postProcessElements(_ elements: [DocumentElement]) async throws -> [DocumentElement] {
-        var processedElements = elements
-        
-        // Check if page has content to process
-        if elements.isEmpty {
-            logger.info("No elements to process - skipping post-processing")
-            return []
-        }
-        
-        // Detect language
-        let language = try detectLanguage(from: processedElements)
-        
-        // Merge split elements
-        processedElements = try await mergeSplitElements(processedElements, language: language)
-        
-        // Duplicate removal removed - it was too aggressive and destroyed legitimate document structure
-        // processedElements = processedElements (no change)
-        
-        // Sort by position
-        processedElements = sortElementsByPosition(processedElements)
-        
-        // Normalize all list items for consistent formatting
-        processedElements = headerAndListDetector.normalizeAllListItems(processedElements)
-        
-        return processedElements
-    }
+
     
     private func shouldMergeElements(_ element1: DocumentElement, _ element2: DocumentElement, language: String) -> Bool {
         // Check if elements are close vertically - use stricter 1% threshold to preserve list items
@@ -957,75 +962,43 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     /// Detect TOC pages and convert appropriate elements to TOC items
     /// Returns: (processedElements, tocPageNumbers)
     private func detectTOCPages(_ elements: [DocumentElement]) -> ([DocumentElement], Set<Int>) {
-        var processedElements = elements
-        var tocPages: Set<Int> = []
-        
-        // Group elements by page
-        let elementsByPage = Dictionary(grouping: processedElements) { $0.pageNumber }
-        
-        logger.info("=== TOC DETECTION ANALYSIS (AFTER SAME-LINE MERGE) ===")
-        logger.info("Total elements after same-line merge: \(elements.count)")
-        
-        for (pageNumber, pageElements) in elementsByPage {
-            logger.info("Page \(pageNumber): \(pageElements.count) elements after same-line merge")
-            
-            // Count headers on this page
-            let headerCount = pageElements.filter { $0.type == .header }.count
-            let totalElements = pageElements.count
-            let headerRatio = Float(headerCount) / Float(totalElements)
-            
-            logger.info("Page \(pageNumber): \(headerCount)/\(totalElements) headers (ratio: \(String(format: "%.1f", headerRatio * 100))%)")
-            
-            // Check if this page is a TOC page (Header Ratio ≥ 90%)
-            if headerRatio >= 0.9 && totalElements >= 3 {
-                logger.info("Page \(pageNumber) identified as TOC page - SKIPPING multi-line merge")
-                tocPages.insert(pageNumber)
-                
-                // Convert appropriate elements on this page to TOC items
-                for i in 0..<processedElements.count {
-                    if processedElements[i].pageNumber == pageNumber {
-                        // Check if this element should be a TOC item
-                        if headerAndListDetector.detectTOCItem(in: processedElements[i]) {
-                            // Convert to TOC item
-                            processedElements[i] = processedElements[i].updating(type: .tocItem)
-                            logger.debug("Converted element to TOC item: '\(processedElements[i].text ?? "")'")
-                        }
-                    }
-                }
-            } else {
-                logger.info("Page \(pageNumber) NOT identified as TOC page (header ratio < 90%) - WILL apply multi-line merge")
-            }
-        }
-        
-        logger.info("=== TOC DETECTION COMPLETED (BEFORE MULTI-LINE MERGE) ===")
-        logger.info("TOC pages (skipping multi-line merge): \(tocPages.sorted())")
-        return (processedElements, tocPages)
+        logger.info("Legacy detectTOCPages method called - TOC detection now done in page-by-page pipeline")
+        // This method is deprecated - TOC detection is now done in the page-by-page pipeline
+        return (elements, Set<Int>())
     }
     
     /// Apply multi-line merging conditionally - skip TOC pages to preserve structure
+    /// Also prevents cross-page merging when TOC pages are involved
     private func mergeSplitSentencesConditionally(_ elements: [DocumentElement], tocPages: Set<Int>) async -> [DocumentElement] {
-        let processedElements = elements
-        
-        // Separate TOC and non-TOC elements
-        let tocElements = processedElements.filter { tocPages.contains($0.pageNumber) }
-        let nonTocElements = processedElements.filter { !tocPages.contains($0.pageNumber) }
-        
-        logger.info("=== MULTI-LINE MERGING ANALYSIS ===")
-        logger.info("TOC pages (preserving structure): \(tocPages.sorted())")
-        logger.info("TOC elements: \(tocElements.count)")
-        logger.info("Non-TOC elements (applying multi-line merge): \(nonTocElements.count)")
-        
-        if nonTocElements.isEmpty {
-            logger.info("No non-TOC elements to process - returning TOC elements as-is")
-            return tocElements
+        logger.info("Legacy mergeSplitSentencesConditionally method called - all processing now done in page-by-page pipeline")
+        // This method is deprecated - all processing is now done in the page-by-page pipeline
+        return elements
+    }
+    
+    /// Check if cross-page optimization should be skipped based on Y-position of last element
+    /// If the last element is far from the bottom (low Y value), skip cross-page optimization
+    /// Y = 0 is at the bottom, Y = 1 is at the top
+    private func shouldSkipCrossPageOptimization(previousElements: [DocumentElement]) -> Bool {
+        guard let lastElement = previousElements.last else {
+            return false
         }
         
-        // Apply multi-line merging only to non-TOC elements
-        let elementsWithSentencesMerged = await headerAndListDetector.mergeSplitSentencesConservative(nonTocElements)
+        let lastElementY = lastElement.boundingBox.minY
         
-        // Combine TOC elements (preserved) with merged non-TOC elements
-        let finalElements = tocElements + elementsWithSentencesMerged
-        logger.info("Conditional multi-line merging completed: \(elements.count) -> \(finalElements.count)")
-        return finalElements
+        // If the last element is far from the bottom (Y < 0.2), skip cross-page optimization
+        // This means the page likely ends naturally and doesn't need continuation
+        if lastElementY < 0.2 {
+            logger.info("Last element Y position (\(String(format: "%.3f", lastElementY))) is far from bottom - skipping cross-page optimization")
+            return true
+        }
+        
+        return false
+    }
+    
+    /// Calculate the ratio of header elements in a collection
+    private func calculateHeaderRatio(_ elements: [DocumentElement]) -> Float {
+        let headerCount = elements.filter { $0.type == .header }.count
+        let totalElements = elements.count
+        return totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
     }
 }

@@ -97,9 +97,12 @@ public final class MarkdownGenerator: Sendable {
         // Sort elements by page and position (top to bottom, left to right)
         let sortedElements = sortElementsByPosition(elements)
         
+        // Detect TOC pages and convert headers to TOC items during markdown generation
+        let elementsWithTOCConversion = convertHeadersToTOCItemsIfNeeded(sortedElements)
+        
         // Process each element
-        for (index, element) in sortedElements.enumerated() {
-            let elementMarkdown = try generateMarkdownForElement(element, at: index, in: sortedElements)
+        for (index, element) in elementsWithTOCConversion.enumerated() {
+            let elementMarkdown = try generateMarkdownForElement(element, at: index, in: elementsWithTOCConversion)
             
             if !elementMarkdown.isEmpty {
                 markdownLines.append(elementMarkdown)
@@ -113,7 +116,7 @@ public final class MarkdownGenerator: Sendable {
         
         // Add table of contents if enabled
         if config.addTableOfContents {
-            let toc = generateTableOfContents(from: sortedElements)
+            let toc = generateTableOfContents(from: elementsWithTOCConversion)
             markdownLines.append("")
             markdownLines.append(toc)
         }
@@ -387,6 +390,55 @@ public final class MarkdownGenerator: Sendable {
         }
         
         return nil
+    }
+    
+    /// Convert headers to TOC items if the page is detected as a TOC page
+    private func convertHeadersToTOCItemsIfNeeded(_ elements: [DocumentElement]) -> [DocumentElement] {
+        // Group elements by page
+        let elementsByPage = Dictionary(grouping: elements) { $0.pageNumber }
+        let sortedPages = elementsByPage.keys.sorted()
+        
+        var convertedElements: [DocumentElement] = []
+        
+        for pageNumber in sortedPages {
+            let pageElements = elementsByPage[pageNumber] ?? []
+            
+            // Check if this page is a TOC page (high header ratio)
+            let headerCount = pageElements.filter { $0.type == .header }.count
+            let totalElements = pageElements.count
+            let headerRatio = totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
+            
+            let isTOCPage = headerRatio >= 0.9 && totalElements >= 3
+            
+            if isTOCPage {
+                logger.info("Page \(pageNumber) detected as TOC page (header ratio: \(String(format: "%.1f", headerRatio * 100))%) - converting headers to TOC items")
+                
+                // Convert headers to TOC items for this page
+                for element in pageElements {
+                    if element.type == .header {
+                        // Create a new element with TOC item type
+                        let tocElement = DocumentElement(
+                            type: .tocItem,
+                            boundingBox: element.boundingBox,
+                            contentData: element.contentData,
+                            confidence: element.confidence,
+                            pageNumber: element.pageNumber,
+                            text: element.text,
+                            metadata: element.metadata,
+                            headerLevel: element.headerLevel
+                        )
+                        convertedElements.append(tocElement)
+                    } else {
+                        convertedElements.append(element)
+                    }
+                }
+            } else {
+                // Keep elements as they are for non-TOC pages
+                convertedElements.append(contentsOf: pageElements)
+            }
+        }
+        
+        return convertedElements
     }
 }
 

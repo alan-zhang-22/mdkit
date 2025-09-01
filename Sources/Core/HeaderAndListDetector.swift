@@ -801,7 +801,8 @@ public class HeaderAndListDetector {
     
     /// Merges all elements that are on the same line horizontally (left to right)
     /// This is a simple, reliable approach that doesn't require complex type detection
-    public func mergeSameLineElements(_ elements: [DocumentElement]) async -> [DocumentElement] {
+    /// - Parameter language: The detected language of the document (e.g., "zh-Hans" for Chinese)
+    public func mergeSameLineElements(_ elements: [DocumentElement], language: String = "en") async -> [DocumentElement] {
         guard elements.count > 1 else { return elements }
         
         // Sort elements by page, then by Y position (top to bottom), then by X position (left to right)
@@ -846,7 +847,9 @@ public class HeaderAndListDetector {
                 // Sort by X position (left to right) to maintain reading order
                 let leftToRightElements = sameLineElements.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
                 
-                let mergedText = leftToRightElements.compactMap { $0.text }.joined(separator: " ")
+                // For Chinese text, don't add spaces between characters
+                let separator = language.hasPrefix("zh") ? "" : " "
+                let mergedText = leftToRightElements.compactMap { $0.text }.joined(separator: separator)
                 let mergedBoundingBox = leftToRightElements.reduce(leftToRightElements[0].boundingBox) { result, element in
                     result.union(element.boundingBox)
                 }
@@ -1311,9 +1314,10 @@ public class HeaderAndListDetector {
         let normalizedText = normalizeListItemText(mergedText)
         
         return DocumentElement(
+            id: firstElement.id,
             type: .listItem,
             boundingBox: mergedBoundingBox,
-            contentData: firstElement.contentData,
+            contentData: Data(),
             confidence: mergedConfidence,
             pageNumber: firstElement.pageNumber,
             text: normalizedText,
@@ -1560,6 +1564,7 @@ public class HeaderAndListDetector {
     /// Optimizes cross-page sentences by redistributing content between consecutive pages
     /// This method moves incomplete sentences from the end of one page to the beginning of the next page
     /// to create complete, self-contained sentences on each page.
+    /// CRITICAL: Skips optimization when TOC pages are involved to preserve TOC structure
     public func optimizeCrossPageSentences(
         currentPage: [DocumentElement],
         nextPage: [DocumentElement],
@@ -1568,6 +1573,16 @@ public class HeaderAndListDetector {
     ) async throws -> (optimizedCurrentPage: [DocumentElement], optimizedNextPage: [DocumentElement]) {
         
         guard !currentPage.isEmpty else {
+            return (currentPage, nextPage)
+        }
+        
+        // CRITICAL: Check if either page is a TOC page before applying cross-page optimization
+        let currentPageHeaderRatio = calculateHeaderRatio(currentPage)
+        let nextPageHeaderRatio = calculateHeaderRatio(nextPage)
+        
+        // If either page has high header ratio (likely TOC), skip cross-page optimization
+        if currentPageHeaderRatio >= 0.9 || nextPageHeaderRatio >= 0.9 {
+            logger.info("TOC page detected (current: \(String(format: "%.1f", currentPageHeaderRatio * 100))%, next: \(String(format: "%.1f", nextPageHeaderRatio * 100))%) - skipping cross-page optimization to preserve TOC structure")
             return (currentPage, nextPage)
         }
         
@@ -1617,5 +1632,12 @@ public class HeaderAndListDetector {
         }
         
         return (optimizedCurrentPage, optimizedNextPage)
+    }
+    
+    /// Calculates the header ratio for a page to determine if it's likely a TOC page
+    private func calculateHeaderRatio(_ elements: [DocumentElement]) -> Float {
+        let headerCount = elements.filter { $0.type == .header || $0.type == .tocItem }.count
+        let totalElements = elements.count
+        return totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
     }
 }
