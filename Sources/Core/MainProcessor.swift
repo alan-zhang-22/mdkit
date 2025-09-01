@@ -380,7 +380,7 @@ public class MainProcessor {
         return outputPaths
     }
     
-    /// Write the output markdown to file
+    /// Write the output markdown to file using run-based organization
     private func writeOutput(
         markdown: String,
         inputPath: String,
@@ -392,10 +392,15 @@ public class MainProcessor {
         if let outputPath = outputPath {
             finalOutputPath = outputPath
         } else {
-            // Generate default output path
+            // Generate run-based output path for markdown
+            let runTimestamp = fileManager.generateRunTimestamp()
             let inputFileName = URL(fileURLWithPath: inputPath).lastPathComponent
-            let baseName = inputFileName.replacingOccurrences(of: ".pdf", with: "")
-            finalOutputPath = "\(config.fileManagement.outputDirectory)/\(baseName)\(config.fileManagement.filenamePattern)"
+            let paths = fileManager.generateRunBasedOutputPaths(for: inputFileName, outputType: .markdown, runTimestamp: runTimestamp)
+            
+            guard let path = paths.outputFiles[.markdown] else {
+                throw MainProcessorError.outputPathGenerationFailed
+            }
+            finalOutputPath = path
         }
         
         // Ensure output directory exists
@@ -412,7 +417,7 @@ public class MainProcessor {
         return finalOutputPath
     }
     
-    /// Write output content to file with specific output type
+    /// Write output content to file with specific output type using run-based organization
     private func writeOutput(
         content: String,
         inputPath: String,
@@ -421,21 +426,15 @@ public class MainProcessor {
         elements: [DocumentElement]
     ) throws -> String {
         
-        let finalOutputPath: String
+        // Generate run timestamp for this processing session
+        let runTimestamp = fileManager.generateRunTimestamp()
         
-        // Always create the proper directory structure for specific output types
+        // Generate run-based output paths
         let inputFileName = URL(fileURLWithPath: inputPath).lastPathComponent
-        let baseName = inputFileName.replacingOccurrences(of: ".pdf", with: "")
-        let timestamp = DateFormatter().string(from: Date())
+        let paths = fileManager.generateRunBasedOutputPaths(for: inputFileName, outputType: outputType, runTimestamp: runTimestamp)
         
-        if let outputPath = outputPath {
-            // If outputPath is provided, use it as the base directory but still create proper structure
-            // Ensure outputPath is treated as a directory path
-            let baseOutputDir = outputPath.hasSuffix("/") ? outputPath : "\(outputPath)/"
-            finalOutputPath = "\(baseOutputDir)\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
-        } else {
-            // Generate default output path for specific output type
-            finalOutputPath = "\(config.fileManagement.outputDirectory)/\(baseName)/\(outputType.directoryName)/\(baseName)_\(timestamp).\(outputType.fileExtension)"
+        guard let finalOutputPath = paths.outputFiles[outputType] else {
+            throw MainProcessorError.outputPathGenerationFailed
         }
         
         // Ensure output directory exists
@@ -649,6 +648,7 @@ public enum MainProcessorError: LocalizedError {
     case inputFileNotReadable(path: String)
     case unsupportedFileType(extension: String)
     case outputDirectoryCreationFailed(path: String)
+    case outputPathGenerationFailed
     case markdownGenerationFailed
     case llmOptimizationFailed
     case noElementsToProcess
@@ -663,6 +663,8 @@ public enum MainProcessorError: LocalizedError {
             return "Unsupported file type: .\(ext). Only PDF files are supported."
         case .outputDirectoryCreationFailed(let path):
             return "Failed to create output directory: \(path)"
+        case .outputPathGenerationFailed:
+            return "Failed to generate output path for file"
         case .markdownGenerationFailed:
             return "Failed to generate markdown from document elements"
         case .llmOptimizationFailed:

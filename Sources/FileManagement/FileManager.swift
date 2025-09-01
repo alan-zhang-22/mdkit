@@ -59,6 +59,8 @@ public protocol FileManaging: Sendable {
     func openOutputStream(for inputFile: String, outputType: OutputType, append: Bool) throws -> OutputStream
     func closeOutputStream(_ stream: OutputStream) throws
     func generateOutputPaths(for inputFile: String, outputType: OutputType) -> OutputPaths
+    func generateRunBasedOutputPaths(for inputFile: String, outputType: OutputType, runTimestamp: String) -> OutputPaths
+    func generateRunTimestamp() -> String
     func ensureDirectoriesExist() throws
     
     // Writing operations
@@ -222,6 +224,35 @@ public final class MDKitFileManager: FileManaging {
         )
     }
     
+    /// Generates output paths with run-based organization structure
+    /// Structure: <outputDir>/<inputFileName>/<runTimestamp>/<type>/<files>
+    public func generateRunBasedOutputPaths(for inputFile: String, outputType: OutputType, runTimestamp: String) -> OutputPaths {
+        let baseDir = config.outputDirectory
+        let baseName = (inputFile as NSString).deletingPathExtension
+        let outputDir = "\(baseDir)/\(baseName)/\(runTimestamp)"
+        
+        // For images, create a separate images subdirectory
+        let typeDir = outputType == .images ? "\(outputDir)/images" : outputDir
+        let fileName = generateRunBasedFileName(for: inputFile, outputType: outputType, runTimestamp: runTimestamp)
+        
+        var outputFiles: [OutputType: String] = [:]
+        outputFiles[outputType] = "\(typeDir)/\(fileName)"
+        
+        return OutputPaths(
+            baseDirectory: baseDir,
+            outputFiles: outputFiles,
+            tempDirectory: "\(config.tempDirectory)/\(getTempDirectoryName(for: inputFile))"
+        )
+    }
+    
+    /// Generates a run timestamp identifier for organizing multiple runs
+    public func generateRunTimestamp() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        formatter.timeZone = TimeZone.current
+        return formatter.string(from: Date())
+    }
+    
     public func ensureDirectoriesExist() throws {
         if config.createDirectories {
             try createDirectoryIfNeeded(config.outputDirectory)
@@ -293,6 +324,13 @@ public final class MDKitFileManager: FileManaging {
         default:
             return "\(baseName).\(outputType.fileExtension)"
         }
+    }
+    
+    private func generateRunBasedFileName(for inputFile: String, outputType: OutputType, runTimestamp: String) -> String {
+        let baseName = (inputFile as NSString).deletingPathExtension
+        
+        // New naming pattern: <inputFileName>_<outputType>_<runTimestamp>.<extension>
+        return "\(baseName)_\(outputType.rawValue)_\(runTimestamp).\(outputType.fileExtension)"
     }
     
     private func getTempDirectoryName(for inputFile: String) -> String {
