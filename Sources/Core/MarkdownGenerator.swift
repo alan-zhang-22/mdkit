@@ -191,15 +191,11 @@ public final class MarkdownGenerator: Sendable {
     
     /// Generate markdown for header elements with level calculation
     private func generateHeaderMarkdown(_ text: String, element: DocumentElement, in elements: [DocumentElement]) -> String {
-        // Use the header level calculated by HeaderAndListDetector if available
-        let level = element.headerLevel ?? calculateHeaderLevel(for: element, in: elements)
+        // Always recalculate header level based on numbering pattern for proper hierarchy
+        let level = calculateHeaderLevelFromNumbering(text)
         
         // Debug logging to see what's happening
-        if element.headerLevel != nil {
-            logger.debug("Using stored header level: \(element.headerLevel!) for '\(text)'")
-        } else {
-            logger.debug("No stored header level, using position-based calculation: \(level) for '\(text)'")
-        }
+        logger.debug("Calculated header level: \(level) for '\(text)'")
         
         let prefix = String(repeating: "#", count: level)
         let anchorId = generateAnchorId(from: text)
@@ -274,7 +270,44 @@ public final class MarkdownGenerator: Sendable {
     
     // MARK: - Helper Methods
     
-    /// Calculate header level based on position and content
+    /// Calculate header level based on numbering pattern (e.g., "6.1.1.3" = level 4)
+    private func calculateHeaderLevelFromNumbering(_ text: String) -> Int {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Extract the header marker (numbering part)
+        let marker = extractHeaderMarkerFromText(trimmedText)
+        
+        // Calculate level based on the number of dots in the marker
+        let components = marker.components(separatedBy: ".")
+        let filteredComponents = components.filter { !$0.isEmpty }
+        
+        // Ensure level is at least 1 and at most 6
+        let calculatedLevel = max(1, min(filteredComponents.count, 6))
+        
+        return calculatedLevel
+    }
+    
+    /// Extract header marker from text (e.g., "6.1.1.3 防雷击" -> "6.1.1.3")
+    private func extractHeaderMarkerFromText(_ text: String) -> String {
+        // Pattern to match numbered headers: digits followed by optional dots and digits
+        let pattern = "^\\d+(?:\\.\\d+)*"
+        
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            if let match = regex.firstMatch(in: text, range: range) {
+                return String(text[Range(match.range, in: text)!])
+            }
+        }
+        
+        // Fallback: return text up to first space
+        if let spaceIndex = text.firstIndex(of: " ") {
+            return String(text[..<spaceIndex])
+        }
+        
+        return text
+    }
+    
+    /// Calculate header level based on position and content (legacy method)
     private func calculateHeaderLevel(for element: DocumentElement, in elements: [DocumentElement]) -> Int {
         // Simple heuristic: use Y position to determine header level
         let normalizedY = element.boundingBox.minY
