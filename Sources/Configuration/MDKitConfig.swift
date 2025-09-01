@@ -645,6 +645,30 @@ public struct ImageExtractionConfig: Codable, Sendable {
     }
 }
 
+// MARK: - Generated TOC Configuration
+
+public struct GeneratedTOCConfig: Codable, Sendable {
+    public let enabled: Bool
+    public let maxHeaderLevel: Int
+    public let includeTitleElements: Bool
+    public let includeHeaderElements: Bool
+    public let excludeTOCPages: Bool
+    
+    public init(
+        enabled: Bool = true,
+        maxHeaderLevel: Int = 2,
+        includeTitleElements: Bool = true,
+        includeHeaderElements: Bool = true,
+        excludeTOCPages: Bool = false
+    ) {
+        self.enabled = enabled
+        self.maxHeaderLevel = maxHeaderLevel
+        self.includeTitleElements = includeTitleElements
+        self.includeHeaderElements = includeHeaderElements
+        self.excludeTOCPages = excludeTOCPages
+    }
+}
+
 // MARK: - Markdown Generation Configuration
 
 public struct MarkdownGenerationConfig: Codable, Sendable {
@@ -655,6 +679,7 @@ public struct MarkdownGenerationConfig: Codable, Sendable {
     public let tableFormat: String
     public let codeBlockFormat: String
     public let addTableOfContents: Bool
+    public let generatedTOC: GeneratedTOCConfig
 
     
     public init(
@@ -664,7 +689,8 @@ public struct MarkdownGenerationConfig: Codable, Sendable {
         listFormat: String = "unordered",
         tableFormat: String = "standard",
         codeBlockFormat: String = "fenced",
-        addTableOfContents: Bool = true
+        addTableOfContents: Bool = true,
+        generatedTOC: GeneratedTOCConfig = GeneratedTOCConfig()
     ) {
         self.preservePageBreaks = preservePageBreaks
         self.extractImages = extractImages
@@ -673,6 +699,7 @@ public struct MarkdownGenerationConfig: Codable, Sendable {
         self.tableFormat = tableFormat
         self.codeBlockFormat = codeBlockFormat
         self.addTableOfContents = addTableOfContents
+        self.generatedTOC = generatedTOC
     }
 }
 

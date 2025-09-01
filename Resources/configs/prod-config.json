@@ -332,7 +332,14 @@
     "listFormat": "unordered",
     "tableFormat": "standard",
     "codeBlockFormat": "fenced",
-    "addTableOfContents": true
+    "addTableOfContents": true,
+    "generatedTOC": {
+      "enabled": true,
+      "maxHeaderLevel": 2,
+      "includeTitleElements": true,
+      "includeHeaderElements": true,
+      "excludeTOCPages": false
+    }
   },
   "ocr": {
     "recognitionLevel": "accurate",

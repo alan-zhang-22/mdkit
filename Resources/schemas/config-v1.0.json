@@ -183,6 +183,86 @@
       },
       "required": ["outputDirectory", "filenamePattern", "createLogFiles", "overwriteExisting", "markdown"]
     },
+    "markdownGeneration": {
+      "type": "object",
+      "description": "Markdown generation configuration",
+      "properties": {
+        "preservePageBreaks": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether to preserve page breaks in markdown output"
+        },
+        "extractImages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to extract and include images in markdown output"
+        },
+        "headerFormat": {
+          "type": "string",
+          "enum": ["atx", "setext"],
+          "default": "atx",
+          "description": "Header format style (atx: # ## ###, setext: === ---)"
+        },
+        "listFormat": {
+          "type": "string",
+          "enum": ["unordered", "ordered", "mixed"],
+          "default": "unordered",
+          "description": "List format style"
+        },
+        "tableFormat": {
+          "type": "string",
+          "enum": ["standard", "simple", "grid"],
+          "default": "standard",
+          "description": "Table format style"
+        },
+        "codeBlockFormat": {
+          "type": "string",
+          "enum": ["fenced", "indented"],
+          "default": "fenced",
+          "description": "Code block format style"
+        },
+        "addTableOfContents": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to add table of contents"
+        },
+        "generatedTOC": {
+          "type": "object",
+          "description": "Generated table of contents configuration",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to enable generated table of contents at the end of the document"
+            },
+            "maxHeaderLevel": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "default": 2,
+              "description": "Maximum header level to include in generated TOC (1-6)"
+            },
+            "includeTitleElements": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to include title elements in generated TOC"
+            },
+            "includeHeaderElements": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether to include header elements in generated TOC"
+            },
+            "excludeTOCPages": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether to exclude elements from TOC pages in generated TOC"
+            }
+          },
+          "required": ["enabled", "maxHeaderLevel", "includeTitleElements", "includeHeaderElements", "excludeTOCPages"]
+        }
+      },
+      "required": ["preservePageBreaks", "extractImages", "headerFormat", "listFormat", "tableFormat", "codeBlockFormat", "addTableOfContents", "generatedTOC"]
+    },
     "llm": {
       "type": "object",
       "description": "LLM configuration",
