@@ -197,9 +197,9 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                         previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
                     }
                 } else {
-                    // First page - apply multi-line merging and normalization
-                    let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
-                    previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                                    // First page - apply multi-line merging and normalization
+                let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
+                previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
                 }
             } else {
                 // For non-PDF documents, process as single image

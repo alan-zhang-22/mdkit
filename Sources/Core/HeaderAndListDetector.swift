@@ -1598,26 +1598,465 @@ public class HeaderAndListDetector {
         return components.count > 1 ? components.last : nil
     }
     
-    /// Normalizes all list item elements in a collection
-    /// This ensures consistent formatting across all list items
+    /// Optimized list item normalization with intelligent marker alignment and formatting
+    /// This handles both ordered (a, b, c) and unordered (*, +, •) lists with OCR error correction
     public func normalizeAllListItems(_ elements: [DocumentElement]) -> [DocumentElement] {
-        return elements.map { element in
-            if element.type == .listItem, let text = element.text {
-                let normalizedText = normalizeListItemText(text)
-                return DocumentElement(
-                    id: element.id,
-                    type: element.type,
-                    boundingBox: element.boundingBox,
-                    contentData: element.contentData,
-                    confidence: element.confidence,
-                    pageNumber: element.pageNumber,
-                    text: normalizedText,
-                    metadata: element.metadata,
-                    headerLevel: element.headerLevel
-                )
+        return processListItems(elements)
+    }
+    
+    /// Comprehensive list item processing with three-step approach:
+    /// 1. Detect and categorize list items (ordered vs unordered)
+    /// 2. Align markers for ordered lists using context
+    /// 3. Unify formatting for consistent output
+    private func processListItems(_ elements: [DocumentElement]) -> [DocumentElement] {
+        // Step 1: Detect and categorize list items
+        let categorizedElements = categorizeListItems(elements)
+        
+        // Step 2: Process ordered lists with alignment
+        let processedOrdered = processOrderedLists(categorizedElements.ordered)
+        
+        // Step 3: Process unordered lists with consistent markers
+        let processedUnordered = processUnorderedLists(categorizedElements.unordered)
+        
+        // Step 4: Merge back with non-list items
+        return mergeProcessedLists(processedOrdered, processedUnordered, categorizedElements.others)
+    }
+    
+    private struct CategorizedElements {
+        let ordered: [DocumentElement]    // a, b, c or 1, 2, 3
+        let unordered: [DocumentElement]  // *, +, =, •
+        let others: [DocumentElement]     // Non-list items
+    }
+    
+    private func categorizeListItems(_ elements: [DocumentElement]) -> CategorizedElements {
+        var ordered: [DocumentElement] = []
+        var unordered: [DocumentElement] = []
+        var others: [DocumentElement] = []
+        
+        for element in elements {
+            if let text = element.text {
+                if isOrderedListItem(text) {
+                    ordered.append(element)
+                } else if isUnorderedListItem(text) {
+                    unordered.append(element)
+                } else {
+                    others.append(element)
+                }
+            } else {
+                others.append(element)
             }
-            return element
         }
+        
+        return CategorizedElements(ordered: ordered, unordered: unordered, others: others)
+    }
+    
+    private func isOrderedListItem(_ text: String) -> Bool {
+        // First check if this looks like a header (contains version numbers or multi-part numbering)
+        if isLikelyHeader(text) {
+            return false
+        }
+        
+        // Use configuration-based patterns for numbered markers
+        for pattern in config.listDetection.patterns.numberedMarkers {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        
+        // Use configuration-based patterns for lettered markers
+        for pattern in config.listDetection.patterns.letteredMarkers {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        
+        // Use configuration-based patterns for Roman markers
+        for pattern in config.listDetection.patterns.romanMarkers {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    /// Checks if text looks like a header rather than a list item
+    private func isLikelyHeader(_ text: String) -> Bool {
+        // Check for multi-part numbering like "8.1.10.5", "3.2.1", etc.
+        if text.range(of: #"^\d+\.\d+(\.\d+)*"#, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // Check for common header patterns with multiple words after the number
+        if text.range(of: #"^\d+[\.）\)]\s*\w+\s+\w+"#, options: .regularExpression) != nil {
+            return true
+        }
+        
+        // Check for section-like patterns
+        if text.range(of: #"^[第章节条款]\d+"#, options: .regularExpression) != nil {
+            return true
+        }
+        
+        return false
+    }
+    
+    private func isUnorderedListItem(_ text: String) -> Bool {
+        // Use configuration-based patterns for bullet markers
+        for pattern in config.listDetection.patterns.bulletMarkers {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        
+        // Use configuration-based patterns for custom markers
+        for pattern in config.listDetection.patterns.customMarkers {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    private func processOrderedLists(_ elements: [DocumentElement]) -> [DocumentElement] {
+        var processed: [DocumentElement] = []
+        var previousMarkers: [String] = []
+        
+        // First pass: collect all markers for context
+        let allMarkers = elements.compactMap { extractMarker(from: $0.text ?? "") }
+        
+        for (index, element) in elements.enumerated() {
+            guard let text = element.text else {
+                processed.append(element)
+                continue
+            }
+            
+            let currentMarker = extractMarker(from: text) ?? ""
+            let nextMarker = index + 1 < allMarkers.count ? allMarkers[index + 1] : nil
+            
+            // Align marker using context
+            let alignedMarker = alignOrderedMarker(
+                currentMarker,
+                previous: previousMarkers,
+                next: nextMarker
+            )
+            
+            // Unify format to ")"
+            let unifiedText = unifyOrderedMarker(text, with: alignedMarker)
+            
+            let processedElement = DocumentElement(
+                id: element.id,
+                type: .listItem,
+                boundingBox: element.boundingBox,
+                contentData: element.contentData,
+                confidence: element.confidence,
+                pageNumber: element.pageNumber,
+                text: unifiedText,
+                metadata: element.metadata,
+                headerLevel: element.headerLevel
+            )
+            
+            processed.append(processedElement)
+            previousMarkers.append(alignedMarker)
+        }
+        
+        return processed
+    }
+    
+    private func processUnorderedLists(_ elements: [DocumentElement]) -> [DocumentElement] {
+        return elements.map { element in
+            guard let text = element.text else { return element }
+            
+            // Convert all unordered markers to consistent "-" format
+            let unifiedText = unifyUnorderedMarker(text)
+            
+            return DocumentElement(
+                id: element.id,
+                type: element.type,
+                boundingBox: element.boundingBox,
+                contentData: element.contentData,
+                confidence: element.confidence,
+                pageNumber: element.pageNumber,
+                text: unifiedText,
+                metadata: element.metadata,
+                headerLevel: element.headerLevel
+            )
+        }
+    }
+    
+    private func alignOrderedMarker(
+        _ marker: String,
+        previous: [String],
+        next: String?
+    ) -> String {
+        // Handle duplicated characters (OCR errors like "gg" -> "g")
+        if marker.count == 2 && marker.first == marker.last {
+            let singleChar = String(marker.first!)
+            
+            // Find correct position in sequence
+            if let aligned = findCorrectPosition(
+                for: singleChar,
+                between: previous,
+                and: next
+            ) {
+                return aligned
+            }
+            
+            return singleChar
+        }
+        
+        return marker
+    }
+    
+    private func findCorrectPosition(
+        for char: String,
+        between previousMarkers: [String],
+        and nextMarker: String?
+    ) -> String? {
+        
+        // Get the most recent previous marker
+        let lastPrevious = previousMarkers.last
+        
+        // Determine the correct position in the sequence
+        if let last = lastPrevious, let next = nextMarker {
+            // We have both previous and next markers
+            return findMiddlePosition(between: last, and: next)
+        } else if let last = lastPrevious {
+            // We only have previous marker - find next in sequence
+            return getNextInSequence(after: last)
+        } else if let next = nextMarker {
+            // We only have next marker - find previous in sequence
+            return getPreviousInSequence(before: next)
+        }
+        
+        return nil
+    }
+    
+    private func findMiddlePosition(between first: String, and second: String) -> String? {
+        // Handle letter sequences: a < b < c
+        if first.count == 1 && second.count == 1,
+           let firstChar = first.first, let secondChar = second.first,
+           firstChar.isLetter && secondChar.isLetter {
+            
+            let firstAscii = firstChar.asciiValue!
+            let secondAscii = secondChar.asciiValue!
+            
+            // Check if there's exactly one character between them
+            if secondAscii - firstAscii == 2 {
+                let middleAscii = firstAscii + 1
+                return String(Character(UnicodeScalar(middleAscii)))
+            }
+        }
+        
+        // Handle number sequences: 1 < 2 < 3
+        if first.count == 1 && second.count == 1,
+           let firstChar = first.first, let secondChar = second.first,
+           firstChar.isNumber && secondChar.isNumber {
+            
+            let firstAscii = firstChar.asciiValue!
+            let secondAscii = secondChar.asciiValue!
+            
+            // Check if there's exactly one number between them
+            if secondAscii - firstAscii == 2 {
+                let middleAscii = firstAscii + 1
+                return String(Character(UnicodeScalar(middleAscii)))
+            }
+        }
+        
+        return nil
+    }
+    
+    private func getNextInSequence(after marker: String) -> String? {
+        // Handle letter sequences: a -> b -> c -> ...
+        if marker.count == 1, let char = marker.first, char.isLetter {
+            let nextChar = Character(UnicodeScalar(char.asciiValue! + 1))
+            return String(nextChar)
+        }
+        
+        // Handle number sequences: 1 -> 2 -> 3 -> ...
+        if marker.count == 1, let char = marker.first, char.isNumber {
+            let nextChar = Character(UnicodeScalar(char.asciiValue! + 1))
+            return String(nextChar)
+        }
+        
+        return nil
+    }
+    
+    private func getPreviousInSequence(before marker: String) -> String? {
+        // Handle letter sequences: ... -> a -> b -> c
+        if marker.count == 1, let char = marker.first, char.isLetter {
+            let prevChar = Character(UnicodeScalar(char.asciiValue! - 1))
+            return String(prevChar)
+        }
+        
+        // Handle number sequences: ... -> 1 -> 2 -> 3
+        if marker.count == 1, let char = marker.first, char.isNumber {
+            let prevChar = Character(UnicodeScalar(char.asciiValue! - 1))
+            return String(prevChar)
+        }
+        
+        return nil
+    }
+    
+    private func unifyOrderedMarker(_ text: String, with marker: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Try to match against configuration patterns and replace with unified format
+        
+        // Try numbered markers
+        for pattern in config.listDetection.patterns.numberedMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let beforeMarker = String(trimmedText[..<Range(match.range, in: trimmedText)!.lowerBound])
+                let afterMarker = String(trimmedText[Range(match.range, in: trimmedText)!.upperBound...])
+                return "\(beforeMarker)\(marker)) \(afterMarker)".trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // Try lettered markers
+        for pattern in config.listDetection.patterns.letteredMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let beforeMarker = String(trimmedText[..<Range(match.range, in: trimmedText)!.lowerBound])
+                let afterMarker = String(trimmedText[Range(match.range, in: trimmedText)!.upperBound...])
+                return "\(beforeMarker)\(marker)) \(afterMarker)".trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // Try Roman markers
+        for pattern in config.listDetection.patterns.romanMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let beforeMarker = String(trimmedText[..<Range(match.range, in: trimmedText)!.lowerBound])
+                let afterMarker = String(trimmedText[Range(match.range, in: trimmedText)!.upperBound...])
+                return "\(beforeMarker)\(marker)) \(afterMarker)".trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // If no pattern matches, return original text
+        return text
+    }
+    
+    private func unifyUnorderedMarker(_ text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Try bullet markers from configuration
+        for pattern in config.listDetection.patterns.bulletMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let beforeMarker = String(trimmedText[..<Range(match.range, in: trimmedText)!.lowerBound])
+                let afterMarker = String(trimmedText[Range(match.range, in: trimmedText)!.upperBound...])
+                return "\(beforeMarker)- \(afterMarker)".trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // Try custom markers from configuration
+        for pattern in config.listDetection.patterns.customMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let beforeMarker = String(trimmedText[..<Range(match.range, in: trimmedText)!.lowerBound])
+                let afterMarker = String(trimmedText[Range(match.range, in: trimmedText)!.upperBound...])
+                return "\(beforeMarker)- \(afterMarker)".trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        // If no pattern matches, return original text
+        return text
+    }
+    
+    private func mergeProcessedLists(
+        _ ordered: [DocumentElement],
+        _ unordered: [DocumentElement],
+        _ others: [DocumentElement]
+    ) -> [DocumentElement] {
+        // Merge all elements back together
+        var result: [DocumentElement] = []
+        result.append(contentsOf: ordered)
+        result.append(contentsOf: unordered)
+        result.append(contentsOf: others)
+        
+        // Sort by original position (page number and Y coordinate)
+        return result.sorted { first, second in
+            if first.pageNumber != second.pageNumber {
+                return first.pageNumber < second.pageNumber
+            }
+            return first.boundingBox.minY < second.boundingBox.minY
+        }
+    }
+    
+    /// Extracts the marker from list item text using configuration patterns
+    private func extractMarker(from text: String) -> String? {
+        // Skip header-like text
+        if isLikelyHeader(text) {
+            return nil
+        }
+        
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Try numbered markers from configuration
+        for pattern in config.listDetection.patterns.numberedMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let markerText = String(trimmedText[Range(match.range, in: trimmedText)!])
+                // Extract just the alphanumeric part (remove punctuation and spaces)
+                if let marker = extractAlphanumericMarker(from: markerText) {
+                    return marker
+                }
+            }
+        }
+        
+        // Try lettered markers from configuration
+        for pattern in config.listDetection.patterns.letteredMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let markerText = String(trimmedText[Range(match.range, in: trimmedText)!])
+                // Extract just the alphanumeric part (remove punctuation and spaces)
+                if let marker = extractAlphanumericMarker(from: markerText) {
+                    // Handle OCR errors like "gg" -> "g"
+                    return handleOCRErrors(in: marker)
+                }
+            }
+        }
+        
+        // Try Roman markers from configuration
+        for pattern in config.listDetection.patterns.romanMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let markerText = String(trimmedText[Range(match.range, in: trimmedText)!])
+                if let marker = extractAlphanumericMarker(from: markerText) {
+                    return marker
+                }
+            }
+        }
+        
+        // Try bullet/custom markers from configuration
+        for pattern in config.listDetection.patterns.bulletMarkers + config.listDetection.patterns.customMarkers {
+            if let regex = try? NSRegularExpression(pattern: pattern),
+               let match = regex.firstMatch(in: trimmedText, options: [], range: NSRange(trimmedText.startIndex..., in: trimmedText)) {
+                let markerText = String(trimmedText[Range(match.range, in: trimmedText)!])
+                return markerText.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        
+        return nil
+    }
+    
+    /// Extracts alphanumeric marker from matched text
+    private func extractAlphanumericMarker(from text: String) -> String? {
+        // Extract letters and numbers only
+        if let match = text.range(of: #"[a-zA-Z0-9]+"#, options: .regularExpression) {
+            return String(text[match])
+        }
+        return nil
+    }
+    
+    /// Handles OCR errors in markers like "gg" -> "g"
+    private func handleOCRErrors(in marker: String) -> String {
+        // Handle duplicated single character (OCR error)
+        if marker.count == 2 && marker.first == marker.last {
+            return String(marker.first!)
+        }
+        return marker
     }
     
     /// Checks if text is in title case
@@ -2106,3 +2545,4 @@ extension Array {
         return indices.contains(index) ? self[index] : nil
     }
 }
+
