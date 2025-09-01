@@ -113,8 +113,23 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 let currentPageHeaderRatio = calculateHeaderRatio(currentPageElementsWithHeadersRedetected)
                 let isCurrentPageTOC = currentPageHeaderRatio >= 0.9 && currentPageElementsWithHeadersRedetected.count >= 3
                 
-                // Step 4.5: Use headers as they are - TOC conversion will happen during markdown generation
-                let currentPageElementsFinal = currentPageElementsWithHeadersRedetected
+                // Step 4.5: Correct TOC page elements (identify and fix orphaned content that should be headers)
+                let currentPageElementsWithTOCCorrection: [DocumentElement]
+                if isCurrentPageTOC {
+                    logger.info("Correcting TOC page elements on page \(pageNumber) - identifying orphaned content")
+                    currentPageElementsWithTOCCorrection = correctTOCPageElements(currentPageElementsWithHeadersRedetected)
+                } else {
+                    currentPageElementsWithTOCCorrection = currentPageElementsWithHeadersRedetected
+                }
+                
+                // Step 4.6: Normalize TOC items if this is a TOC page (remove page numbers)
+                let currentPageElementsFinal: [DocumentElement]
+                if isCurrentPageTOC {
+                    logger.info("Normalizing TOC items on page \(pageNumber) - removing page numbers")
+                    currentPageElementsFinal = headerAndListDetector.normalizeAllTOCItems(currentPageElementsWithTOCCorrection)
+                } else {
+                    currentPageElementsFinal = currentPageElementsWithTOCCorrection
+                }
                 
                 // Step 4.6: Also check if the previous page was a TOC page to prevent cross-page optimization
                 let isPreviousPageTOC: Bool
@@ -1000,5 +1015,240 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         let headerCount = elements.filter { $0.type == .header }.count
         let totalElements = elements.count
         return totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
+    }
+    
+    /// Corrects TOC page elements by identifying orphaned content that should be headers
+    private func correctTOCPageElements(_ elements: [DocumentElement]) -> [DocumentElement] {
+        var correctedElements = elements
+        
+        for i in 0..<correctedElements.count {
+            let currentElement = correctedElements[i]
+            
+            // Skip if already a header
+            guard currentElement.type != .header, let currentText = currentElement.text else { continue }
+            
+            // Check if this element looks like it should be a header (contains Chinese text, no sentence ending)
+            if shouldBeHeader(currentText) {
+                // Look for the expected header number based on surrounding context
+                if let expectedNumber = predictMissingHeaderNumberForOrphanedContent(at: i, in: correctedElements) {
+                    let fixedText = "\(expectedNumber) \(currentText)"
+                    logger.info("Corrected orphaned content to header: '\(currentText)' → '\(fixedText)'")
+                    
+                    // Calculate header level based on the numbering
+                    let headerLevel = calculateHeaderLevelFromNumbering(expectedNumber)
+                    
+                    correctedElements[i] = DocumentElement(
+                        id: currentElement.id,
+                        type: .header,
+                        boundingBox: currentElement.boundingBox,
+                        contentData: currentElement.contentData,
+                        confidence: currentElement.confidence,
+                        pageNumber: currentElement.pageNumber,
+                        text: fixedText,
+                        metadata: currentElement.metadata,
+                        headerLevel: headerLevel
+                    )
+                }
+            }
+        }
+        
+        return correctedElements
+    }
+    
+    /// Determines if a text element should be a header based on its characteristics
+    private func shouldBeHeader(_ text: String) -> Bool {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        logger.debug("Checking if should be header: '\(trimmedText)'")
+        
+        // Skip if too short or too long
+        if trimmedText.count < 3 || trimmedText.count > 50 { 
+            logger.debug("Rejected: length \(trimmedText.count) not in range 3-50")
+            return false 
+        }
+        
+        // Skip if it ends with sentence-ending punctuation
+        if trimmedText.hasSuffix("。") || trimmedText.hasSuffix(".") || 
+           trimmedText.hasSuffix("；") || trimmedText.hasSuffix(";") ||
+           trimmedText.hasSuffix("！") || trimmedText.hasSuffix("!") ||
+           trimmedText.hasSuffix("？") || trimmedText.hasSuffix("?") {
+            logger.debug("Rejected: ends with sentence-ending punctuation")
+            return false
+        }
+        
+        // Skip if it starts with common non-header words
+        let nonHeaderPrefixes = ["本项要求包括：", "本项要求", "应", "应确保", "应指定", "应采取", "应进行", "应保证", "应制定", "应规定"]
+        for prefix in nonHeaderPrefixes {
+            if trimmedText.hasPrefix(prefix) {
+                logger.debug("Rejected: starts with non-header prefix '\(prefix)'")
+                return false
+            }
+        }
+        
+        // Check if it contains Chinese characters (likely a header)
+        let chinesePattern = "[\\u4e00-\\u9fff]"
+        if let regex = try? NSRegularExpression(pattern: chinesePattern) {
+            let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+            let matches = regex.matches(in: trimmedText, range: range)
+            let chineseCount = matches.count
+            logger.debug("Chinese character count: \(chineseCount)")
+            if chineseCount >= 3 {
+                logger.debug("Accepted as header: '\(trimmedText)'")
+                return true
+            } else {
+                logger.debug("Rejected: only \(chineseCount) Chinese characters (need >= 3)")
+                return false
+            }
+        }
+        
+        logger.debug("Rejected: no Chinese characters found")
+        return false
+    }
+    
+    /// Predicts missing header number for orphaned content based on surrounding context
+    private func predictMissingHeaderNumberForOrphanedContent(at index: Int, in elements: [DocumentElement]) -> String? {
+        logger.debug("Predicting header number for element at index \(index)")
+        
+        // Look at previous and next header elements to determine the pattern
+        var previousNumber: String?
+        var nextNumber: String?
+        
+        // Find the previous header with a number
+        for i in (0..<index).reversed() {
+            if let element = elements[safe: i], 
+               element.type == .header, 
+               let text = element.text,
+               let number = extractHeaderNumber(from: text) {
+                previousNumber = number
+                logger.debug("Found previous header number: '\(number)' from text: '\(text)'")
+                break
+            }
+        }
+        
+        // Find the next header with a number
+        for i in (index + 1)..<elements.count {
+            if let element = elements[safe: i], 
+               element.type == .header, 
+               let text = element.text,
+               let number = extractHeaderNumber(from: text) {
+                nextNumber = number
+                logger.debug("Found next header number: '\(number)' from text: '\(text)'")
+                break
+            }
+        }
+        
+        logger.debug("Previous number: \(previousNumber ?? "nil"), Next number: \(nextNumber ?? "nil")")
+        
+        // Predict the missing number based on context
+        if let prev = previousNumber, let next = nextNumber {
+            let predicted = predictNumberBetween(prev, next)
+            logger.debug("Predicted number between '\(prev)' and '\(next)': \(predicted ?? "nil")")
+            return predicted
+        } else if let prev = previousNumber {
+            let predicted = predictNextNumber(prev)
+            logger.debug("Predicted next number after '\(prev)': \(predicted ?? "nil")")
+            return predicted
+        } else if let next = nextNumber {
+            let predicted = predictPreviousNumber(next)
+            logger.debug("Predicted previous number before '\(next)': \(predicted ?? "nil")")
+            return predicted
+        }
+        
+        logger.debug("Could not predict header number - no context found")
+        return nil
+    }
+    
+    /// Extracts header number from text (e.g., "5.1 等级保护对象" → "5.1")
+    private func extractHeaderNumber(from text: String) -> String? {
+        let pattern = "^(\\d+(\\.\\d+)*)\\s"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        
+        let numberRange = Range(match.range(at: 1), in: text)!
+        return String(text[numberRange])
+    }
+    
+    /// Predicts the number between two given numbers
+    private func predictNumberBetween(_ prev: String, _ next: String) -> String? {
+        // Handle simple increment (e.g., "5.1" → "5.2" → "5.3")
+        if let prevBase = extractBaseNumber(prev),
+           let nextBase = extractBaseNumber(next),
+           prevBase == nextBase,
+           let prevSuffix = extractSuffix(prev),
+           let nextSuffix = extractSuffix(next),
+           let prevSuffixInt = Int(prevSuffix),
+           let nextSuffixInt = Int(nextSuffix),
+           nextSuffixInt == prevSuffixInt + 2 {
+            // Gap is exactly 2, so the missing number is in the middle
+            return "\(prevBase).\(prevSuffixInt + 1)"
+        }
+        
+        return nil
+    }
+    
+    /// Predicts the next number in sequence
+    private func predictNextNumber(_ current: String) -> String? {
+        if let base = extractBaseNumber(current),
+           let suffix = extractSuffix(current),
+           let suffixInt = Int(suffix) {
+            return "\(base).\(suffixInt + 1)"
+        }
+        return nil
+    }
+    
+    /// Predicts the previous number in sequence
+    private func predictPreviousNumber(_ current: String) -> String? {
+        if let base = extractBaseNumber(current),
+           let suffix = extractSuffix(current),
+           let suffixInt = Int(suffix),
+           suffixInt > 1 {
+            return "\(base).\(suffixInt - 1)"
+        }
+        return nil
+    }
+    
+    /// Extracts base number (e.g., "5.1" → "5")
+    private func extractBaseNumber(_ number: String) -> String? {
+        let components = number.components(separatedBy: ".")
+        return components.first
+    }
+    
+    /// Extracts suffix number (e.g., "5.1" → "1")
+    private func extractSuffix(_ number: String) -> String? {
+        let components = number.components(separatedBy: ".")
+        return components.count > 1 ? components.last : nil
+    }
+    
+    /// Calculate header level from numbering pattern (e.g., "6.1.1.3" = level 4)
+    private func calculateHeaderLevelFromNumbering(_ text: String) -> Int {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Extract the header marker (e.g., "6.1.1.3")
+        guard let headerMarker = extractHeaderMarkerFromText(trimmedText) else {
+            return 1 // Default to level 1 if no numbering pattern found
+        }
+        
+        // Count the number of dot-separated components to determine level
+        let components = headerMarker.split(separator: ".").count
+        
+        // Ensure level is at least 1
+        return max(1, components)
+    }
+    
+    /// Extracts the numbering pattern from a header text (e.g., "6.1.1.3" from "6.1.1.3 防雷击")
+    private func extractHeaderMarkerFromText(_ text: String) -> String? {
+        // Pattern to match numbered headers like "1", "1.1", "1.1.1", "1.1.1.1"
+        let pattern = "^(\\d+(?:\\.\\d+)*)"
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(text.startIndex..<text.endIndex, in: text)
+            if let match = regex.firstMatch(in: text, range: range) {
+                if let markerRange = Range(match.range(at: 1), in: text) {
+                    return String(text[markerRange])
+                }
+            }
+        }
+        return nil
     }
 }

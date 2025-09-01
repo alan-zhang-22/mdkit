@@ -446,8 +446,11 @@ public final class MarkdownGenerator: Sendable {
             if isTOCPage {
                 logger.info("Page \(pageNumber) detected as TOC page (header ratio: \(String(format: "%.1f", headerRatio * 100))%) - converting headers to TOC items")
                 
+                // First, apply missing header number fix to headers on this page
+                let fixedHeaders = fixMissingHeaderNumbers(pageElements)
+                
                 // Convert headers to TOC items for this page
-                for element in pageElements {
+                for element in fixedHeaders {
                     if element.type == .header {
                         // Create a new element with TOC item type
                         let tocElement = DocumentElement(
@@ -473,6 +476,145 @@ public final class MarkdownGenerator: Sendable {
         
         return convertedElements
     }
+    
+    /// Fixes missing header numbers in TOC pages by analyzing context
+    private func fixMissingHeaderNumbers(_ elements: [DocumentElement]) -> [DocumentElement] {
+        var fixedElements = elements
+        
+        for i in 0..<fixedElements.count {
+            let currentElement = fixedElements[i]
+            
+            // Only process header elements
+            guard currentElement.type == .header, let currentText = currentElement.text else { continue }
+            
+            // Check if current element is missing a header number (doesn't start with a number)
+            if !currentText.matches(pattern: "^\\d+(\\.\\d+)*\\s") {
+                // Look for the expected header number based on surrounding context
+                if let expectedNumber = predictMissingHeaderNumber(at: i, in: fixedElements) {
+                    let fixedText = "\(expectedNumber) \(currentText)"
+                    logger.info("Fixed missing header number: '\(currentText)' → '\(fixedText)'")
+                    
+                    fixedElements[i] = DocumentElement(
+                        id: currentElement.id,
+                        type: currentElement.type,
+                        boundingBox: currentElement.boundingBox,
+                        contentData: currentElement.contentData,
+                        confidence: currentElement.confidence,
+                        pageNumber: currentElement.pageNumber,
+                        text: fixedText,
+                        metadata: currentElement.metadata,
+                        headerLevel: currentElement.headerLevel
+                    )
+                }
+            }
+        }
+        
+        return fixedElements
+    }
+    
+    /// Predicts the missing header number based on surrounding context
+    private func predictMissingHeaderNumber(at index: Int, in elements: [DocumentElement]) -> String? {
+        // Look at previous and next header elements to determine the pattern
+        var previousNumber: String?
+        var nextNumber: String?
+        
+        // Find the previous header with a number
+        for i in (0..<index).reversed() {
+            if let element = elements[safe: i], 
+               element.type == .header, 
+               let text = element.text,
+               let number = extractHeaderNumber(from: text) {
+                previousNumber = number
+                break
+            }
+        }
+        
+        // Find the next header with a number
+        for i in (index + 1)..<elements.count {
+            if let element = elements[safe: i], 
+               element.type == .header, 
+               let text = element.text,
+               let number = extractHeaderNumber(from: text) {
+                nextNumber = number
+                break
+            }
+        }
+        
+        // Predict the missing number based on context
+        if let prev = previousNumber, let next = nextNumber {
+            return predictNumberBetween(prev, next)
+        } else if let prev = previousNumber {
+            return predictNextNumber(prev)
+        } else if let next = nextNumber {
+            return predictPreviousNumber(next)
+        }
+        
+        return nil
+    }
+    
+    /// Extracts header number from text (e.g., "5.1 等级保护对象" → "5.1")
+    private func extractHeaderNumber(from text: String) -> String? {
+        let pattern = "^(\\d+(\\.\\d+)*)\\s"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        
+        let numberRange = Range(match.range(at: 1), in: text)!
+        return String(text[numberRange])
+    }
+    
+    /// Predicts the number between two given numbers
+    private func predictNumberBetween(_ prev: String, _ next: String) -> String? {
+        // Handle simple increment (e.g., "5.1" → "5.2" → "5.3")
+        if let prevBase = extractBaseNumber(prev),
+           let nextBase = extractBaseNumber(next),
+           prevBase == nextBase,
+           let prevSuffix = extractSuffix(prev),
+           let nextSuffix = extractSuffix(next),
+           let prevSuffixInt = Int(prevSuffix),
+           let nextSuffixInt = Int(nextSuffix),
+           nextSuffixInt == prevSuffixInt + 1 {
+            return "\(prevBase).\(prevSuffixInt + 1)"
+        }
+        
+        return nil
+    }
+    
+    /// Predicts the next number in sequence
+    private func predictNextNumber(_ current: String) -> String? {
+        if let base = extractBaseNumber(current),
+           let suffix = extractSuffix(current),
+           let suffixInt = Int(suffix) {
+            return "\(base).\(suffixInt + 1)"
+        }
+        return nil
+    }
+    
+    /// Predicts the previous number in sequence
+    private func predictPreviousNumber(_ current: String) -> String? {
+        if let base = extractBaseNumber(current),
+           let suffix = extractSuffix(current),
+           let suffixInt = Int(suffix),
+           suffixInt > 1 {
+            return "\(base).\(suffixInt - 1)"
+        }
+        return nil
+    }
+    
+    /// Extracts base number (e.g., "5.1" → "5")
+    private func extractBaseNumber(_ number: String) -> String? {
+        let components = number.components(separatedBy: ".")
+        return components.first
+    }
+    
+    /// Extracts suffix number (e.g., "5.1" → "1")
+    private func extractSuffix(_ number: String) -> String? {
+        let components = number.components(separatedBy: ".")
+        return components.count > 1 ? components.last : nil
+    }
+    
+
 }
 
 

@@ -1405,6 +1405,190 @@ public class HeaderAndListDetector {
         return "\(normalizedMarker) \(content)"
     }
     
+    /// Normalize TOC item text by removing page numbers at the end
+    public func normalizeTOCItemText(_ text: String) -> String {
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Pattern to match: content followed by optional spaces and a page number at the end
+        // This will remove the page number and trailing spaces
+        let pattern = "^(.+?)\\s*\\d+\\s*$"
+        
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let range = NSRange(trimmedText.startIndex..<trimmedText.endIndex, in: trimmedText)
+            if let match = regex.firstMatch(in: trimmedText, range: range) {
+                let contentRange = Range(match.range(at: 1), in: trimmedText)!
+                let content = String(trimmedText[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return content
+            }
+        }
+        
+        // If no pattern match, return original text
+        return trimmedText
+    }
+    
+    /// Normalizes all TOC item elements in a collection
+    public func normalizeAllTOCItems(_ elements: [DocumentElement]) -> [DocumentElement] {
+        var normalizedElements = elements.map { element in
+            if element.type == .header, let text = element.text {
+                let normalizedText = normalizeTOCItemText(text)
+                return DocumentElement(
+                    id: element.id,
+                    type: element.type,
+                    boundingBox: element.boundingBox,
+                    contentData: element.contentData,
+                    confidence: element.confidence,
+                    pageNumber: element.pageNumber,
+                    text: normalizedText,
+                    metadata: element.metadata,
+                    headerLevel: element.headerLevel
+                )
+            }
+            return element
+        }
+        
+        // Post-process to fix missing header numbers in TOC pages
+        normalizedElements = fixMissingHeaderNumbers(normalizedElements)
+        
+        return normalizedElements
+    }
+    
+    /// Fixes missing header numbers in TOC pages by analyzing context
+    private func fixMissingHeaderNumbers(_ elements: [DocumentElement]) -> [DocumentElement] {
+        var fixedElements = elements
+        
+        for i in 0..<fixedElements.count {
+            let currentElement = fixedElements[i]
+            
+            // Only process header elements
+            guard currentElement.type == .header, let currentText = currentElement.text else { continue }
+            
+            // Check if current element is missing a header number (doesn't start with a number)
+            if !currentText.matches(pattern: "^\\d+(\\.\\d+)*\\s") {
+                // Look for the expected header number based on surrounding context
+                if let expectedNumber = predictMissingHeaderNumber(at: i, in: fixedElements) {
+                    let fixedText = "\(expectedNumber) \(currentText)"
+                    logger.info("Fixed missing header number: '\(currentText)' → '\(fixedText)'")
+                    
+                    fixedElements[i] = DocumentElement(
+                        id: currentElement.id,
+                        type: currentElement.type,
+                        boundingBox: currentElement.boundingBox,
+                        contentData: currentElement.contentData,
+                        confidence: currentElement.confidence,
+                        pageNumber: currentElement.pageNumber,
+                        text: fixedText,
+                        metadata: currentElement.metadata,
+                        headerLevel: currentElement.headerLevel
+                    )
+                }
+            }
+        }
+        
+        return fixedElements
+    }
+    
+    /// Predicts the missing header number based on surrounding context
+    private func predictMissingHeaderNumber(at index: Int, in elements: [DocumentElement]) -> String? {
+        // Look at previous and next header elements to determine the pattern
+        var previousNumber: String?
+        var nextNumber: String?
+        
+        // Find the previous header with a number
+        for i in (0..<index).reversed() {
+            if let element = elements[safe: i], 
+               element.type == .header, 
+               let text = element.text,
+               let number = extractHeaderNumber(from: text) {
+                previousNumber = number
+                break
+            }
+        }
+        
+        // Find the next header with a number
+        for i in (index + 1)..<elements.count {
+            if let element = elements[safe: i], 
+               element.type == .header, 
+               let text = element.text,
+               let number = extractHeaderNumber(from: text) {
+                nextNumber = number
+                break
+            }
+        }
+        
+        // Predict the missing number based on context
+        if let prev = previousNumber, let next = nextNumber {
+            return predictNumberBetween(prev, next)
+        } else if let prev = previousNumber {
+            return predictNextNumber(prev)
+        } else if let next = nextNumber {
+            return predictPreviousNumber(next)
+        }
+        
+        return nil
+    }
+    
+    /// Extracts header number from text (e.g., "5.1 等级保护对象" → "5.1")
+    private func extractHeaderNumber(from text: String) -> String? {
+        let pattern = "^(\\d+(\\.\\d+)*)\\s"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range) else { return nil }
+        
+        let numberRange = Range(match.range(at: 1), in: text)!
+        return String(text[numberRange])
+    }
+    
+    /// Predicts the number between two given numbers
+    private func predictNumberBetween(_ prev: String, _ next: String) -> String? {
+        // Handle simple increment (e.g., "5.1" → "5.2" → "5.3")
+        if let prevBase = extractBaseNumber(prev),
+           let nextBase = extractBaseNumber(next),
+           prevBase == nextBase,
+           let prevSuffix = extractSuffix(prev),
+           let nextSuffix = extractSuffix(next),
+           let prevSuffixInt = Int(prevSuffix),
+           let nextSuffixInt = Int(nextSuffix),
+           nextSuffixInt == prevSuffixInt + 1 {
+            return "\(prevBase).\(prevSuffixInt + 1)"
+        }
+        
+        return nil
+    }
+    
+    /// Predicts the next number in sequence
+    private func predictNextNumber(_ current: String) -> String? {
+        if let base = extractBaseNumber(current),
+           let suffix = extractSuffix(current),
+           let suffixInt = Int(suffix) {
+            return "\(base).\(suffixInt + 1)"
+        }
+        return nil
+    }
+    
+    /// Predicts the previous number in sequence
+    private func predictPreviousNumber(_ current: String) -> String? {
+        if let base = extractBaseNumber(current),
+           let suffix = extractSuffix(current),
+           let suffixInt = Int(suffix),
+           suffixInt > 1 {
+            return "\(base).\(suffixInt - 1)"
+        }
+        return nil
+    }
+    
+    /// Extracts base number (e.g., "5.1" → "5")
+    private func extractBaseNumber(_ number: String) -> String? {
+        let components = number.components(separatedBy: ".")
+        return components.first
+    }
+    
+    /// Extracts suffix number (e.g., "5.1" → "1")
+    private func extractSuffix(_ number: String) -> String? {
+        let components = number.components(separatedBy: ".")
+        return components.count > 1 ? components.last : nil
+    }
+    
     /// Normalizes all list item elements in a collection
     /// This ensures consistent formatting across all list items
     public func normalizeAllListItems(_ elements: [DocumentElement]) -> [DocumentElement] {
@@ -1656,5 +1840,23 @@ public class HeaderAndListDetector {
         let headerCount = elements.filter { $0.type == .header || $0.type == .tocItem }.count
         let totalElements = elements.count
         return totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
+    }
+}
+
+// MARK: - Extensions
+
+extension String {
+    /// Checks if the string matches a regex pattern
+    func matches(pattern: String) -> Bool {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        let range = NSRange(startIndex..<endIndex, in: self)
+        return regex.firstMatch(in: self, range: range) != nil
+    }
+}
+
+extension Array {
+    /// Safe subscript that returns nil if index is out of bounds
+    subscript(safe index: Index) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }
