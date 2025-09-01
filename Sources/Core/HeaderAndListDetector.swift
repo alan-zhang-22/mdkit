@@ -847,8 +847,14 @@ public class HeaderAndListDetector {
                 // Sort by X position (left to right) to maintain reading order
                 let leftToRightElements = sameLineElements.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
                 
-                // For Chinese text, don't add spaces between characters
-                let separator = language.hasPrefix("zh") ? "" : " "
+                // Determine separator based on language and element types
+                var separator = language.hasPrefix("zh") ? "" : " "
+                
+                // If the first element is a header, always add a space to preserve header detection
+                if leftToRightElements.first?.type == .header {
+                    separator = " "
+                }
+                
                 let mergedText = leftToRightElements.compactMap { $0.text }.joined(separator: separator)
                 let mergedBoundingBox = leftToRightElements.reduce(leftToRightElements[0].boundingBox) { result, element in
                     result.union(element.boundingBox)
@@ -1059,6 +1065,17 @@ public class HeaderAndListDetector {
                     logger.debug("❌ Next element starts with header marker: '\(trimmedNextText)'")
                     return false // This is a NEW header, not a continuation
                 }
+            }
+        }
+        
+        // Additional check for merged header patterns (e.g., "5.1等级保护对象3")
+        // Check if the text starts with a number followed by a dot and another number
+        let mergedHeaderPattern = "^\\d+\\.\\d+"
+        if let regex = try? NSRegularExpression(pattern: mergedHeaderPattern) {
+            let range = NSRange(trimmedNextText.startIndex..<trimmedNextText.endIndex, in: trimmedNextText)
+            if regex.firstMatch(in: trimmedNextText, range: range) != nil {
+                logger.debug("❌ Next element starts with merged header pattern: '\(trimmedNextText)'")
+                return false // This is a NEW header, not a continuation
             }
         }
         
