@@ -16,6 +16,7 @@ public struct MDKitConfig: Codable, Sendable {
     public let headerFooterDetection: HeaderFooterDetectionConfig
     public let headerDetection: HeaderDetectionConfig
     public let listDetection: ListDetectionConfig
+    public let sameLineMerging: SameLineMergingConfig
     public let duplicationDetection: DuplicationDetectionConfig
     public let positionSorting: PositionSortingConfig
     public let markdownGeneration: MarkdownGenerationConfig
@@ -31,6 +32,7 @@ public struct MDKitConfig: Codable, Sendable {
         headerFooterDetection: HeaderFooterDetectionConfig = HeaderFooterDetectionConfig(),
         headerDetection: HeaderDetectionConfig = HeaderDetectionConfig(markdownLevelOffset: 0),
         listDetection: ListDetectionConfig = ListDetectionConfig(),
+        sameLineMerging: SameLineMergingConfig = SameLineMergingConfig(),
         duplicationDetection: DuplicationDetectionConfig = DuplicationDetectionConfig(),
         positionSorting: PositionSortingConfig = PositionSortingConfig(),
         markdownGeneration: MarkdownGenerationConfig = MarkdownGenerationConfig(),
@@ -45,6 +47,7 @@ public struct MDKitConfig: Codable, Sendable {
         self.headerFooterDetection = headerFooterDetection
         self.headerDetection = headerDetection
         self.listDetection = listDetection
+        self.sameLineMerging = sameLineMerging
         self.duplicationDetection = duplicationDetection
         self.positionSorting = positionSorting
         self.markdownGeneration = markdownGeneration
@@ -461,6 +464,39 @@ public struct ListIndentationConfig: Codable, Sendable {
         self.baseIndentation = baseIndentation
         self.levelThreshold = levelThreshold
         self.enableXCoordinateAnalysis = enableXCoordinateAnalysis
+    }
+}
+
+// MARK: - Same Line Merging Configuration
+
+public struct SameLineMergingConfig: Codable, Sendable {
+    public let enabled: Bool
+    public let verticalTolerance: Double
+    public let horizontalTolerance: Double
+    public let enableHeaderContentMerging: Bool
+    public let enableMultilingualMerging: Bool
+    public let separatorForChinese: String
+    public let separatorForEnglish: String
+    public let enableLogging: Bool
+    
+    public init(
+        enabled: Bool = true,
+        verticalTolerance: Double = 0.01,
+        horizontalTolerance: Double = 0.1,
+        enableHeaderContentMerging: Bool = true,
+        enableMultilingualMerging: Bool = true,
+        separatorForChinese: String = "",
+        separatorForEnglish: String = " ",
+        enableLogging: Bool = false
+    ) {
+        self.enabled = enabled
+        self.verticalTolerance = verticalTolerance
+        self.horizontalTolerance = horizontalTolerance
+        self.enableHeaderContentMerging = enableHeaderContentMerging
+        self.enableMultilingualMerging = enableMultilingualMerging
+        self.separatorForChinese = separatorForChinese
+        self.separatorForEnglish = separatorForEnglish
+        self.enableLogging = enableLogging
     }
 }
 

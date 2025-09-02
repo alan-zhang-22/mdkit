@@ -321,6 +321,16 @@
       "enableXCoordinateAnalysis": true
     }
   },
+  "sameLineMerging": {
+    "enabled": true,
+    "verticalTolerance": 0.01,
+    "horizontalTolerance": 0.1,
+    "enableHeaderContentMerging": true,
+    "enableMultilingualMerging": true,
+    "separatorForChinese": "",
+    "separatorForEnglish": " ",
+    "enableLogging": true
+  },
   "duplicationDetection": {
     "enabled": true,
     "overlapThreshold": 0.25,

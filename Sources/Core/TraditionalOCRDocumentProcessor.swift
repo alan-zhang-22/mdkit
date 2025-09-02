@@ -13,6 +13,7 @@ import Logging
 import PDFKit
 import mdkitProtocols
 import mdkitConfiguration
+import mdkitFileManagement
 
 /// Traditional OCR-based document processor using VNRecognizeTextRequest
 @available(macOS 10.15, *)
@@ -25,6 +26,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     private let markdownGenerator: MarkdownGenerator
     private let languageDetector: LanguageDetector
     private let headerAndListDetector: HeaderAndListDetector
+    private let fileManager: mdkitFileManagement.FileManaging
     
     // Track current PDF processing context for language detection
     private var currentPDFURL: URL?
@@ -33,13 +35,17 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     // Store generated image data for output generation
     private var storedImageData: [Int: Data] = [:]
     
+    // Store run timestamp for consistent file naming
+    private var runTimestamp: String?
+    
     // MARK: - Initialization
     
-    public init(configuration: MDKitConfig, markdownGenerator: MarkdownGenerator, languageDetector: LanguageDetector, headerAndListDetector: HeaderAndListDetector) {
+    public init(configuration: MDKitConfig, markdownGenerator: MarkdownGenerator, languageDetector: LanguageDetector, headerAndListDetector: HeaderAndListDetector, fileManager: mdkitFileManagement.FileManaging) {
         self.configuration = configuration
         self.markdownGenerator = markdownGenerator
         self.languageDetector = languageDetector
         self.headerAndListDetector = headerAndListDetector
+        self.fileManager = fileManager
         self.logger = Logger(label: "TraditionalOCRDocumentProcessor")
     }
     
@@ -48,6 +54,14 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     public func processDocument(at documentPath: String, pageRange: PageRange?) async throws -> DocumentProcessingResult {
         logger.info("Processing document at path: \(documentPath)")
         
+        // Generate run timestamp for consistent file naming (if not already set)
+        if runTimestamp == nil {
+            runTimestamp = fileManager.generateRunTimestamp()
+            logger.info("Generated run timestamp: \(runTimestamp ?? "nil")")
+        } else {
+            logger.info("Using existing run timestamp: \(runTimestamp ?? "nil")")
+        }
+        
         // Get document info first
         let documentInfo = try await getDocumentInfo(at: documentPath)
         logger.info("Document info: \(documentInfo.pageCount) pages, format: \(documentInfo.format)")
@@ -55,6 +69,8 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         // Determine which pages to process
         let pagesToProcess = pageRange?.getPageNumbers(totalPages: documentInfo.pageCount) ?? Array(1...documentInfo.pageCount)
         logger.info("Processing pages: \(pagesToProcess)")
+        
+
         
         var allElements: [DocumentElement] = []
         var previousPageElements: [DocumentElement]? = nil
@@ -76,6 +92,14 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 if currentPageElements.isEmpty {
                     logger.info("Page \(pageNumber) has no elements - skipping processing")
                     if let previousElements = previousPageElements {
+                        // Write the previous page markdown before continuing
+                        try writePageMarkdownToStream(
+                            pageElements: previousElements,
+                            pageNumber: pagesToProcess[index - 1],
+                            documentPath: documentPath,
+                            isFirstPage: index == 1,
+                            totalPages: documentInfo.pageCount
+                        )
                         allElements.append(contentsOf: previousElements)
                         previousPageElements = []
                     }
@@ -85,15 +109,21 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 // Step 2: Sort by position (within current page)
                 let currentPageElementsSorted = sortElementsByPosition(currentPageElements)
                 
-                // Step 3: Apply same-line merging (with sorted elements) - MOVED HERE
+                // Step 3: Apply same-line merging (with sorted elements) - ALWAYS FIRST
                 // Detect language for this page to determine spacing behavior
                 let pageLanguage = (try? detectLanguage(from: currentPageElementsSorted)) ?? "en"
                 let currentPageElementsWithSameLineMerged = await headerAndListDetector.mergeSameLineElements(currentPageElementsSorted, language: pageLanguage)
                 
-                // Step 3.5: Re-detect headers after same-line merging
-                let currentPageElementsWithHeadersRedetected = currentPageElementsWithSameLineMerged.map { element in
+                // Step 3.5: Detect headers and list items after same-line merging
+                let currentPageElementsWithHeadersAndListsDetected = currentPageElementsWithSameLineMerged.map { element in
+                    // First check if it's a header
                     let headerResult = headerAndListDetector.detectHeader(in: element)
                     if headerResult.isHeader {
+                        // Log specific element for debugging
+                        if let text = element.text, text.contains("3.16") {
+                            logger.info("🔍 HEADER DETECTION - '3.16' detected as header with level: \(headerResult.level)")
+                        }
+                        
                         return DocumentElement(
                             type: .header,
                             boundingBox: element.boundingBox,
@@ -104,22 +134,48 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                             metadata: element.metadata,
                             headerLevel: headerResult.level
                         )
-                    } else {
-                        return element
                     }
+                    
+                    // Then check if it's a list item
+                    let listItemResult = headerAndListDetector.detectListItem(in: element)
+                    if listItemResult.isListItem {
+                        // Log specific element for debugging
+                        if let text = element.text, text.contains("3.16") {
+                            logger.info("🔍 LIST ITEM DETECTION - '3.16' detected as list item with level: \(listItemResult.level)")
+                        }
+                        
+                        return DocumentElement(
+                            type: .listItem,
+                            boundingBox: element.boundingBox,
+                            contentData: element.contentData,
+                            confidence: element.confidence,
+                            pageNumber: element.pageNumber,
+                            text: element.text,
+                            metadata: element.metadata,
+                            headerLevel: listItemResult.level
+                        )
+                    }
+                    
+                    // Log if 3.16 is not detected as header or list item
+                    if let text = element.text, text.contains("3.16") {
+                        logger.info("🔍 ELEMENT TYPE - '3.16' NOT detected as header or list item, keeping as: \(element.type)")
+                    }
+                    
+                    // Otherwise, keep as paragraph
+                    return element
                 }
                 
                 // Step 4: TOC Detection (BEFORE cross-page optimization)
-                let currentPageHeaderRatio = calculateHeaderRatio(currentPageElementsWithHeadersRedetected)
-                let isCurrentPageTOC = currentPageHeaderRatio >= 0.9 && currentPageElementsWithHeadersRedetected.count >= 3
+                let currentPageHeaderRatio = calculateHeaderRatio(currentPageElementsWithHeadersAndListsDetected)
+                let isCurrentPageTOC = currentPageHeaderRatio >= 0.9 && currentPageElementsWithHeadersAndListsDetected.count >= 3
                 
                 // Step 4.5: Correct TOC page elements (identify and fix orphaned content that should be headers)
                 let currentPageElementsWithTOCCorrection: [DocumentElement]
                 if isCurrentPageTOC {
                     logger.info("Correcting TOC page elements on page \(pageNumber) - identifying orphaned content")
-                    currentPageElementsWithTOCCorrection = correctTOCPageElements(currentPageElementsWithHeadersRedetected)
+                    currentPageElementsWithTOCCorrection = correctTOCPageElements(currentPageElementsWithHeadersAndListsDetected)
                 } else {
-                    currentPageElementsWithTOCCorrection = currentPageElementsWithHeadersRedetected
+                    currentPageElementsWithTOCCorrection = currentPageElementsWithHeadersAndListsDetected
                 }
                 
                 // Step 4.6: Normalize TOC items if this is a TOC page (remove page numbers)
@@ -135,7 +191,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                 let currentPageElementsWithHeaderOptimization: [DocumentElement]
                 if !isCurrentPageTOC {
                     logger.info("Applying page-level header optimization on page \(pageNumber)")
-                    currentPageElementsWithHeaderOptimization = await headerAndListDetector.optimizePageHeaders(currentPageElementsFinal)
+                    currentPageElementsWithHeaderOptimization = await headerAndListDetector.optimizePageElementsWithAlignmentChecking(currentPageElementsFinal, pageNumber: pageNumber)
                 } else {
                     currentPageElementsWithHeaderOptimization = currentPageElementsFinal
                 }
@@ -168,9 +224,37 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                         let normalizedPreviousPage = headerAndListDetector.normalizeAllListItems(finalPreviousPage)
                         allElements.append(contentsOf: normalizedPreviousPage)
                         
+                        // Write previous page markdown to file
+                        try writePageMarkdownToStream(
+                            pageElements: normalizedPreviousPage,
+                            pageNumber: pagesToProcess[index - 1],
+                            documentPath: documentPath,
+                            isFirstPage: index == 1,
+                            totalPages: documentInfo.pageCount
+                        )
+                        
                         // Apply multi-line merging and normalization to current page
                         let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
-                        previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                        let normalizedCurrentPage = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                        
+                        // Check if this is the last page - if so, write markdown immediately
+                        // since there's no next page to optimize with
+                        if index == pagesToProcess.count - 1 {
+                            // This is the last page - write markdown immediately
+                            try writePageMarkdownToStream(
+                                pageElements: normalizedCurrentPage,
+                                pageNumber: pageNumber,
+                                documentPath: documentPath,
+                                isFirstPage: false,
+                                totalPages: documentInfo.pageCount
+                            )
+                            
+                            // Add to allElements since it's already written
+                            allElements.append(contentsOf: normalizedCurrentPage)
+                        } else {
+                            // Store for next iteration (not the last page)
+                            previousPageElements = normalizedCurrentPage
+                        }
                     } else {
                         // Only run cross-page optimization if neither page is a TOC page
                         // This ensures TOC pages are never affected by cross-page optimization
@@ -190,16 +274,62 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                         // Step 8: Store previous page elements
                         allElements.append(contentsOf: normalizedPreviousPage)
                         
+                        // Write previous page markdown to file
+                        try writePageMarkdownToStream(
+                            pageElements: normalizedPreviousPage,
+                            pageNumber: pagesToProcess[index - 1],
+                            documentPath: documentPath,
+                            isFirstPage: index == 1,
+                            totalPages: documentInfo.pageCount
+                        )
+                        
                         // Step 9: Multi-line merging for current page
                         let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(optimizedCurrentPage)
                         
                         // Step 10: Normalize list items for current page
-                        previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                        let normalizedCurrentPage = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                        
+                        // Check if this is the last page - if so, write markdown immediately
+                        // since there's no next page to optimize with
+                        if index == pagesToProcess.count - 1 {
+                            // This is the last page - write markdown immediately
+                            try writePageMarkdownToStream(
+                                pageElements: normalizedCurrentPage,
+                                pageNumber: pageNumber,
+                                documentPath: documentPath,
+                                isFirstPage: false,
+                                totalPages: documentInfo.pageCount
+                            )
+                            
+                            // Add to allElements since it's already written
+                            allElements.append(contentsOf: normalizedCurrentPage)
+                        } else {
+                            // Store for next iteration (not the last page)
+                            previousPageElements = normalizedCurrentPage
+                        }
                     }
                 } else {
-                                    // First page - apply multi-line merging and normalization
-                let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
-                previousPageElements = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                    // First page - apply multi-line merging and normalization
+                    let finalCurrentPage = await headerAndListDetector.mergeSplitSentencesConservative(currentPageElementsWithHeaderOptimization)
+                    let normalizedCurrentPage = headerAndListDetector.normalizeAllListItems(finalCurrentPage)
+                    
+                    // Check if this is the only page (single page document)
+                    if pagesToProcess.count == 1 {
+                        // Single page document - write markdown immediately
+                        try writePageMarkdownToStream(
+                            pageElements: normalizedCurrentPage,
+                            pageNumber: pageNumber,
+                            documentPath: documentPath,
+                            isFirstPage: true,
+                            totalPages: documentInfo.pageCount
+                        )
+                        
+                        // Add to allElements since it's already written
+                        allElements.append(contentsOf: normalizedCurrentPage)
+                    } else {
+                        // Store for next iteration (not the last page)
+                        previousPageElements = normalizedCurrentPage
+                    }
                 }
             } else {
                 // For non-PDF documents, process as single image
@@ -210,10 +340,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             }
         }
         
-        // Add the last page elements (which may have been optimized)
-        if let lastPageElements = previousPageElements {
-            allElements.append(contentsOf: lastPageElements)
-        }
+
         
         logger.info("Successfully processed document with cross-page optimization, extracted \(allElements.count) elements")
         
@@ -236,6 +363,13 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
     /// - Returns: Dictionary mapping page numbers to image data
     public func getAllStoredImageData() -> [Int: Data] {
         return storedImageData
+    }
+    
+    /// Set the run timestamp for consistent file naming across the processing pipeline
+    /// - Parameter timestamp: The run timestamp to use for file naming
+    public func setRunTimestamp(_ timestamp: String) {
+        self.runTimestamp = timestamp
+        logger.info("Set run timestamp to: \(timestamp)")
     }
     
     public func processDocument(at documentPath: String) async throws -> DocumentProcessingResult {
@@ -490,18 +624,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         return sortElementsByPosition(elements)
     }
     
-    public func generateMarkdown(from elements: [DocumentElement], inputFilename: String? = nil, blankPages: [Int] = [], totalPagesProcessed: Int = 0, totalPagesRequested: Int = 0) throws -> String {
-        logger.info("Generating markdown from \(elements.count) elements")
-        
-        // Sort elements by position before generating markdown
-        let sortedElements = sortElementsByPosition(elements)
-        
-        // Delegate markdown generation to the MarkdownGenerator
-        let markdown = try markdownGenerator.generateMarkdown(from: sortedElements, inputFilename: inputFilename, blankPages: blankPages, totalPagesProcessed: totalPagesProcessed, totalPagesRequested: totalPagesRequested)
-        
-        logger.info("Markdown generation completed")
-        return markdown
-    }
+
     
 
     
@@ -642,7 +765,7 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
             return false
         }
         
-        // Additional check: if either element is a list item, be very conservative about merging
+        // Additional check: if either element is a list item or header, be very conservative about merging
         if let text1 = element1.text, let text2 = element2.text {
             let normalizedText1 = text1.trimmingCharacters(in: .whitespacesAndNewlines)
             let normalizedText2 = text2.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -667,6 +790,18 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
                normalizedText2.hasPrefix("v）") || normalizedText2.hasPrefix("w）") || normalizedText2.hasPrefix("x）") ||
                normalizedText2.hasPrefix("y）") || normalizedText2.hasPrefix("z）") {
                 return false
+            }
+            
+            // Don't merge if either text looks like a numbered header (e.g., "3.2", "4.1", etc.)
+            let headerPattern = "^\\d+(?:\\.\\d+)*$"
+            if let regex = try? NSRegularExpression(pattern: headerPattern) {
+                let range1 = NSRange(normalizedText1.startIndex..<normalizedText1.endIndex, in: normalizedText1)
+                let range2 = NSRange(normalizedText2.startIndex..<normalizedText2.endIndex, in: normalizedText2)
+                
+                if regex.firstMatch(in: normalizedText1, range: range1) != nil ||
+                   regex.firstMatch(in: normalizedText2, range: range2) != nil {
+                    return false
+                }
             }
         }
         
@@ -1294,4 +1429,71 @@ public class TraditionalOCRDocumentProcessor: DocumentProcessing {
         }
         return nil
     }
+    
+    /// Writes markdown for a single page to the output file.
+    /// - Parameters:
+    ///   - pageElements: The DocumentElements for the current page.
+    ///   - pageNumber: The 1-based page number.
+    ///   - documentPath: The path to the original document.
+    ///   - isFirstPage: Whether this is the first page of the document.
+    ///   - totalPages: The total number of pages in the document.
+    ///   - stream: The output stream to write to.
+    private func writePageMarkdownToStream(pageElements: [DocumentElement], pageNumber: Int, documentPath: String, isFirstPage: Bool, totalPages: Int) throws {
+        guard !pageElements.isEmpty else {
+            logger.info("Page \(pageNumber) has no elements - skipping markdown writing")
+            return
+        }
+        
+        // Generate markdown content for this page
+        let inputFilename = URL(fileURLWithPath: documentPath).lastPathComponent
+        let pageMarkdown = try markdownGenerator.generateMarkdownForPage(
+            from: pageElements,
+            pageNumber: pageNumber,
+            inputFilename: inputFilename,
+            isFirstPage: isFirstPage,
+            totalPages: totalPages
+        )
+        
+        // Write markdown content directly to the final markdown file
+        logger.info("Writing markdown to file for page \(pageNumber)")
+        logger.info("Markdown content length: \(pageMarkdown.count)")
+        
+        // Generate the final markdown file path using the same pattern as MainProcessor
+        guard let timestamp = runTimestamp else {
+            throw mdkitProtocols.DocumentProcessingError.processingFailed("Run timestamp not available for file naming")
+        }
+        
+        let paths = fileManager.generateRunBasedOutputPaths(for: inputFilename, outputType: .markdown, runTimestamp: timestamp)
+        guard let finalMarkdownPath = paths.outputFiles[.markdown] else {
+            throw mdkitProtocols.DocumentProcessingError.processingFailed("Failed to generate markdown output path")
+        }
+        
+        logger.info("Generated markdown file path: \(finalMarkdownPath)")
+        
+        // Ensure the directory exists
+        let finalMarkdownDir = (finalMarkdownPath as NSString).deletingLastPathComponent
+        if !Foundation.FileManager.default.fileExists(atPath: finalMarkdownDir) {
+            try Foundation.FileManager.default.createDirectory(
+                atPath: finalMarkdownDir,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+        }
+        
+        // Append content to the final markdown file
+        if Foundation.FileManager.default.fileExists(atPath: finalMarkdownPath) {
+            // File exists, append to it
+            let fileHandle = try FileHandle(forWritingTo: URL(fileURLWithPath: finalMarkdownPath))
+            fileHandle.seekToEndOfFile()
+            fileHandle.write(pageMarkdown.data(using: .utf8)!)
+            fileHandle.closeFile()
+        } else {
+            // File doesn't exist, create it
+            try pageMarkdown.write(toFile: finalMarkdownPath, atomically: true, encoding: .utf8)
+        }
+        
+        logger.info("Page \(pageNumber) markdown written to final file successfully")
+    }
+    
+
 }

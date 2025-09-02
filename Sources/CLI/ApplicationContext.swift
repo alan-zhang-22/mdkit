@@ -119,7 +119,8 @@ public final class ApplicationContext: @unchecked Sendable {
             configuration: config,
             markdownGenerator: markdownGenerator,
             languageDetector: languageDetector,
-            headerAndListDetector: headerAndListDetector
+            headerAndListDetector: headerAndListDetector,
+            fileManager: fileManager
         )
         
         // Step 7: Initialize main processor with all injected services

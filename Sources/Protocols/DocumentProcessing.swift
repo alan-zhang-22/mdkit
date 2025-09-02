@@ -14,12 +14,14 @@ public struct DocumentProcessingResult {
     public let blankPages: [Int]
     public let totalPagesProcessed: Int
     public let totalPagesRequested: Int
+    public let markdownContent: String?
     
-    public init(elements: [DocumentElement], blankPages: [Int], totalPagesProcessed: Int, totalPagesRequested: Int) {
+    public init(elements: [DocumentElement], blankPages: [Int], totalPagesProcessed: Int, totalPagesRequested: Int, markdownContent: String? = nil) {
         self.elements = elements
         self.blankPages = blankPages
         self.totalPagesProcessed = totalPagesProcessed
         self.totalPagesRequested = totalPagesRequested
+        self.markdownContent = markdownContent
     }
 }
 
@@ -218,22 +220,33 @@ public protocol DocumentProcessing {
     /// - Returns: An array of sorted elements
     func sortElementsByPositionWithinPage(_ elements: [DocumentElement]) -> [DocumentElement]
     
-    // MARK: - Output Generation
-    
-    /// Generates markdown from processed elements
-    /// - Parameters:
-    ///   - elements: The processed document elements
-    ///   - inputFilename: Optional input filename for metadata
-    ///   - blankPages: Array of blank page numbers
-    ///   - totalPagesProcessed: Total number of pages with content
-    ///   - totalPagesRequested: Total number of pages requested
-    /// - Returns: The generated markdown string
-    /// - Throws: An error if markdown generation fails
-    func generateMarkdown(from elements: [DocumentElement], inputFilename: String?, blankPages: [Int], totalPagesProcessed: Int, totalPagesRequested: Int) throws -> String
-    
+}
 
-    
+// MARK: - Supporting Types
 
+/// Callback for page-by-page processing
+public typealias PageProcessingCallback = (PageProcessingResult) async throws -> Void
+
+/// Result of processing a single page
+public struct PageProcessingResult {
+    /// The processed elements for this page
+    public let elements: [DocumentElement]
+    /// The page number
+    public let pageNumber: Int
+    /// Whether this is the first page
+    public let isFirstPage: Bool
+    /// Total number of pages in the document
+    public let totalPages: Int
+    /// Whether this page was identified as a TOC page
+    public let isTOCPage: Bool
+    
+    public init(elements: [DocumentElement], pageNumber: Int, isFirstPage: Bool, totalPages: Int, isTOCPage: Bool = false) {
+        self.elements = elements
+        self.pageNumber = pageNumber
+        self.isFirstPage = isFirstPage
+        self.totalPages = totalPages
+        self.isTOCPage = isTOCPage
+    }
 }
 
 // MARK: - Document Information

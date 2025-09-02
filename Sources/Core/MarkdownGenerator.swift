@@ -55,85 +55,84 @@ public final class MarkdownGenerator: Sendable {
     
     // MARK: - Public Interface
     
-    /// Generate markdown from an array of document elements
+    /// Generate markdown content for a single page
     /// - Parameters:
-    ///   - elements: Array of processed document elements
+    ///   - pageElements: Array of document elements for this page
+    ///   - pageNumber: Current page number
     ///   - inputFilename: Original input filename for metadata
-    ///   - blankPages: Array of blank page numbers
-    ///   - totalPagesProcessed: Total number of pages with content
-    ///   - totalPagesRequested: Total number of pages requested
-    /// - Returns: Generated markdown string
+    ///   - isFirstPage: Whether this is the first page (to include front matter)
+    ///   - totalPages: Total number of pages in the document
+    /// - Returns: Generated markdown string for this page
     /// - Throws: MarkdownGenerationError if generation fails
-    public func generateMarkdown(from elements: [DocumentElement], inputFilename: String? = nil, blankPages: [Int] = [], totalPagesProcessed: Int = 0, totalPagesRequested: Int = 0) throws -> String {
-        guard !elements.isEmpty else {
-            throw MarkdownGenerationError.noElementsToProcess
+    public func generateMarkdownForPage(
+        from pageElements: [DocumentElement],
+        pageNumber: Int,
+        inputFilename: String?,
+        isFirstPage: Bool,
+        totalPages: Int
+    ) throws -> String {
+        
+        guard !pageElements.isEmpty else {
+            // Return empty string for pages with no content
+            return ""
         }
         
-        logger.info("Starting markdown generation for \(elements.count) elements")
+        logger.info("Generating markdown for page \(pageNumber) with \(pageElements.count) elements")
         
-        // Extract meaningful title from first page elements
-        let meaningfulTitle = extractDocumentTitle(from: elements) ?? "Document Processing Results"
-        
-        // Add YAML front matter
         var markdownLines: [String] = []
-        markdownLines.append("---")
-        markdownLines.append("title: \(meaningfulTitle)")
-        if let inputFilename = inputFilename {
-            markdownLines.append("source_file: \(inputFilename)")
-        }
-        markdownLines.append("generated: \(Date().formatted())")
-        markdownLines.append("total_elements: \(elements.count)")
-        markdownLines.append("pages_processed: \(totalPagesProcessed)")
-        markdownLines.append("pages_requested: \(totalPagesRequested)")
-        if !blankPages.isEmpty {
-            markdownLines.append("blank_pages: [\(blankPages.map(String.init).joined(separator: ", "))]")
-        }
-        markdownLines.append("document_type: PDF")
-        markdownLines.append("processing_tool: MDKit")
-        markdownLines.append("version: 1.0")
-        markdownLines.append("---")
-        markdownLines.append("")
         
-        // Sort elements by page and position (top to bottom, left to right)
-        let sortedElements = sortElementsByPosition(elements)
+        // Add front matter only for the first page
+        if isFirstPage {
+            // Extract meaningful title from first page elements
+            let meaningfulTitle = extractDocumentTitle(from: pageElements) ?? "Document Processing Results"
+            
+            // Add YAML front matter
+            markdownLines.append("---")
+            markdownLines.append("title: \(meaningfulTitle)")
+            if let inputFilename = inputFilename {
+                markdownLines.append("source_file: \(inputFilename)")
+            }
+            markdownLines.append("generated: \(Date().formatted())")
+            markdownLines.append("total_pages: \(totalPages)")
+            markdownLines.append("document_type: PDF")
+            markdownLines.append("processing_tool: MDKit")
+            markdownLines.append("version: 1.0")
+            markdownLines.append("---")
+            markdownLines.append("")
+        }
         
-        // Detect TOC pages and convert headers to TOC items during markdown generation
+        // Sort elements by position (top to bottom, left to right)
+        let sortedElements = sortElementsByPosition(pageElements)
+        
+        // Check if this page is a TOC page and convert headers to TOC items if needed
         let elementsWithTOCConversion = convertHeadersToTOCItemsIfNeeded(sortedElements)
-        
-        // Log element types before markdown generation
-        logger.info("📋 ELEMENT TYPES BEFORE MARKDOWN GENERATION:")
-        for (index, element) in elementsWithTOCConversion.enumerated() {
-            let text = element.text?.prefix(30) ?? "no text"
-            logger.info("  Element \(index): type=\(element.type), text='\(text)...'")
-        }
         
         // Process each element
         for (index, element) in elementsWithTOCConversion.enumerated() {
-            let elementMarkdown = try generateMarkdownForElement(element, at: index, in: elementsWithTOCConversion)
-            
-            if !elementMarkdown.isEmpty {
-                markdownLines.append(elementMarkdown)
-                
-                // Add spacing between elements, but not between TOC items
-                if index < sortedElements.count - 1 {
-                    let nextElement = elementsWithTOCConversion[index + 1]
-                    let isCurrentTOC = element.type == .tocItem
-                    let isNextTOC = nextElement.type == .tocItem
+            do {
+                let elementMarkdown = try generateMarkdownForElement(element, at: index, in: elementsWithTOCConversion)
+                if !elementMarkdown.isEmpty {
+                    markdownLines.append(elementMarkdown)
                     
-                    // Only add blank line if not between two TOC items
-                    if !(isCurrentTOC && isNextTOC) {
-                        markdownLines.append("")
+                    // Add spacing between elements, but not between consecutive TOC items
+                    if index < elementsWithTOCConversion.count - 1 {
+                        let nextElement = elementsWithTOCConversion[index + 1]
+                        let isCurrentTOC = element.type == .tocItem
+                        let isNextTOC = nextElement.type == .tocItem
+                        
+                        // Only add blank line if not between two TOC items
+                        if !(isCurrentTOC && isNextTOC) {
+                            markdownLines.append("")
+                        }
                     }
                 }
+            } catch {
+                logger.warning("Failed to generate markdown for element \(index): \(error.localizedDescription)")
+                // Continue with other elements
             }
         }
         
-
-        
-        let markdown = markdownLines.joined(separator: "\n")
-        logger.info("Markdown generation completed successfully")
-        
-        return markdown
+        return markdownLines.joined(separator: "\n")
     }
     
     // MARK: - Private Methods
@@ -438,6 +437,8 @@ public final class MarkdownGenerator: Sendable {
             let headerRatio = totalElements > 0 ? Float(headerCount) / Float(totalElements) : 0.0
             
             let isTOCPage = headerRatio >= 0.9 && totalElements >= 3
+            
+            logger.debug("🔍 TOC CONVERSION: Page \(pageNumber) - headerCount: \(headerCount), totalElements: \(totalElements), headerRatio: \(String(format: "%.1f", headerRatio * 100))%, isTOCPage: \(isTOCPage)")
             
             if isTOCPage {
                 logger.info("Page \(pageNumber) detected as TOC page (header ratio: \(String(format: "%.1f", headerRatio * 100))%) - converting headers to TOC items")

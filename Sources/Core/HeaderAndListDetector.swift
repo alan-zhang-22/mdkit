@@ -1047,7 +1047,18 @@ public class HeaderAndListDetector {
     /// This is a simple, reliable approach that doesn't require complex type detection
     /// - Parameter language: The detected language of the document (e.g., "zh-Hans" for Chinese)
     public func mergeSameLineElements(_ elements: [DocumentElement], language: String = "en") async -> [DocumentElement] {
-        guard elements.count > 1 else { return elements }
+        guard elements.count > 1 else { 
+            logger.info("🔗 SAME-LINE MERGING - Only \(elements.count) elements, skipping merge")
+            return elements 
+        }
+        
+        // Check if same-line merging is enabled in configuration
+        guard config.sameLineMerging.enabled else {
+            logger.info("🔗 SAME-LINE MERGING - Disabled in configuration")
+            return elements
+        }
+        
+        logger.info("🔗 SAME-LINE MERGING - Starting with \(elements.count) elements, language: \(language)")
         
         // Sort elements by page, then by Y position (top to bottom), then by X position (left to right)
         let sortedElements = elements.sorted { first, second in
@@ -1060,6 +1071,8 @@ public class HeaderAndListDetector {
             return first.boundingBox.minX < second.boundingBox.minX // Left to right on same line
         }
         
+        logger.info("🔗 SAME-LINE MERGING - Sorted elements by position")
+        
         var mergedElements: [DocumentElement] = []
         var i = 0
         
@@ -1068,6 +1081,8 @@ public class HeaderAndListDetector {
             var sameLineElements: [DocumentElement] = [currentElement]
             var j = i + 1
             
+            logger.debug("🔗 SAME-LINE MERGING - Processing element \(i): '\(currentElement.text ?? "")' at Y=\(String(format: "%.4f", currentElement.boundingBox.minY))")
+            
             // Find all elements on the same line
             while j < sortedElements.count {
                 let nextElement = sortedElements[j]
@@ -1075,24 +1090,44 @@ public class HeaderAndListDetector {
                 // Check if elements are on the same line (within tolerance)
                 if currentElement.pageNumber == nextElement.pageNumber {
                     let verticalDistance = abs(currentElement.boundingBox.minY - nextElement.boundingBox.minY)
-                    if verticalDistance <= 0.01 { // Same line tolerance
+                    if config.sameLineMerging.enableLogging {
+                        logger.debug("🔗 SAME-LINE MERGING - Checking element \(j): '\(nextElement.text ?? "")' at Y=\(String(format: "%.4f", nextElement.boundingBox.minY)), verticalDistance=\(String(format: "%.4f", verticalDistance))")
+                    }
+                    
+                    if verticalDistance <= config.sameLineMerging.verticalTolerance { // Same line tolerance from config
+                        // Same-line merging is MANDATORY - merge all elements on the same line
+                        // No horizontal threshold check needed for same-line elements
+                        if config.sameLineMerging.enableLogging {
+                            logger.debug("🔗 SAME-LINE MERGING - Elements on same line - MERGING MANDATORY")
+                        }
                         sameLineElements.append(nextElement)
+                        if config.sameLineMerging.enableLogging {
+                            logger.debug("🔗 SAME-LINE MERGING - Added to same-line group: '\(nextElement.text ?? "")'")
+                        }
                         j += 1
                     } else {
+                        if config.sameLineMerging.enableLogging {
+                            logger.debug("🔗 SAME-LINE MERGING - Stopping merge due to different line (distance=\(String(format: "%.4f", verticalDistance)))")
+                        }
                         break // Different line
                     }
                 } else {
+                    if config.sameLineMerging.enableLogging {
+                        logger.debug("🔗 SAME-LINE MERGING - Stopping merge due to different page")
+                    }
                     break // Different page
                 }
             }
             
             // Merge elements on the same line
             if sameLineElements.count > 1 {
+                logger.info("🔗 SAME-LINE MERGING - Merging \(sameLineElements.count) elements: \(sameLineElements.map { "'\($0.text ?? "")'" }.joined(separator: " + "))")
+                
                 // Sort by X position (left to right) to maintain reading order
                 let leftToRightElements = sameLineElements.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
                 
-                // Determine separator based on language and element types
-                var separator = language.hasPrefix("zh") ? "" : " "
+                // Determine separator based on language and element types from config
+                var separator = language.hasPrefix("zh") ? config.sameLineMerging.separatorForChinese : config.sameLineMerging.separatorForEnglish
                 
                 // If the first element is a header, always add a space to preserve header detection
                 if leftToRightElements.first?.type == .header {
@@ -1103,6 +1138,8 @@ public class HeaderAndListDetector {
                 let mergedBoundingBox = leftToRightElements.reduce(leftToRightElements[0].boundingBox) { result, element in
                     result.union(element.boundingBox)
                 }
+                
+                logger.info("🔗 SAME-LINE MERGING - Merged result: '\(mergedText)' (separator: '\(separator)')")
                 
                 let merged = DocumentElement(
                     type: leftToRightElements[0].type, // Keep the type of the first element
@@ -1118,14 +1155,18 @@ public class HeaderAndListDetector {
                 mergedElements.append(merged)
                 i = j // Skip processed elements
             } else {
+                logger.debug("🔗 SAME-LINE MERGING - No merge needed for: '\(currentElement.text ?? "")'")
                 mergedElements.append(currentElement)
                 i += 1
             }
         }
         
-        logger.info("Merged \(elements.count - mergedElements.count) same-line elements")
+        let mergedCount = elements.count - mergedElements.count
+        logger.info("🔗 SAME-LINE MERGING - Completed: merged \(mergedCount) elements, final count: \(mergedElements.count)")
         return mergedElements
     }
+    
+
     
     /// Merges split sentences that span multiple lines (conservative approach)
     /// Only merges when confident it's a sentence continuation, not a new list/header
@@ -2589,7 +2630,7 @@ public class HeaderAndListDetector {
     
     /// Comprehensive page-level alignment checking for both headers and list items
     /// This method identifies false headers and list items and converts them to paragraphs
-    private func optimizePageElementsWithAlignmentChecking(_ elements: [DocumentElement], pageNumber: Int) async -> [DocumentElement] {
+    public func optimizePageElementsWithAlignmentChecking(_ elements: [DocumentElement], pageNumber: Int) async -> [DocumentElement] {
         logger.info("🔍 PAGE-LEVEL ALIGNMENT CHECKING - Page \(pageNumber): Starting with \(elements.count) elements")
         
         // Step 1: Analyze page context for header alignment
@@ -3009,14 +3050,58 @@ public class HeaderAndListDetector {
             }
             
             // Check if it's the same level but next number
-            if let prevNum = Int(previous), let currNum = Int(current) {
-                return currNum == prevNum + 1
-            }
-            
-            // Check for different levels: "3.18" -> "4" (subsection to new major section)
             let prevDots = previous.filter { $0 == "." }.count
             let currDots = current.filter { $0 == "." }.count
             
+            // Handle same level and different level sequences
+            
+            // Same level (same number of dots)
+            if prevDots == currDots {
+                // For single numbers: "3" -> "4"
+                if prevDots == 0 {
+                    if let prevNum = Int(previous), let currNum = Int(current) {
+                        return currNum == prevNum + 1
+                    }
+                } else {
+                    // For decimal numbers: "3.15" -> "3.16", "3.1.2" -> "3.1.3", etc.
+                    let prevComponents = previous.components(separatedBy: ".")
+                    let currComponents = current.components(separatedBy: ".")
+                    
+                    if prevComponents.count == currComponents.count {
+                        // Check if all components except the last are the same
+                        let prefixMatch = zip(prevComponents.dropLast(), currComponents.dropLast()).allSatisfy { $0 == $1 }
+                        if prefixMatch {
+                                                    // Check if the last component is incremented by 1
+                        if let prevLast = Int(prevComponents.last ?? ""),
+                           let currLast = Int(currComponents.last ?? "") {
+                            // Allow for reasonable gaps in numbering (e.g., 3.6 -> 3.8 is valid)
+                            // Only flag as misaligned if the gap is too large (more than 5)
+                            let gap = currLast - prevLast
+                            return gap >= 1 && gap <= 5
+                        }
+                        }
+                    }
+                }
+            } else {
+                // Different levels: find the shorter one and evaluate leftmost common part
+                let prevComponents = previous.components(separatedBy: ".")
+                let currComponents = current.components(separatedBy: ".")
+                
+                // Find the shorter one (fewer components)
+                let shorterComponents = prevComponents.count <= currComponents.count ? prevComponents : currComponents
+                let longerComponents = prevComponents.count <= currComponents.count ? currComponents : prevComponents
+                
+                // Check if the shorter one is a prefix of the longer one
+                if shorterComponents.count > 0 {
+                    let commonPrefix = Array(longerComponents.prefix(shorterComponents.count))
+                    if commonPrefix == shorterComponents {
+                        // They share the same prefix, so they are aligned
+                        return true
+                    }
+                }
+            }
+            
+            // Check for different levels: "3.18" -> "4" (subsection to new major section)
             // If previous has dots (like "3.18") and current doesn't (like "4"), 
             // it's likely a new major section, which is valid
             if prevDots > 0 && currDots == 0 {
