@@ -3002,12 +3002,12 @@ public class HeaderAndListDetector {
         // Check each header level for misalignment
         for (level, markers) in pageContext.headerNumberingByLevel {
             if markers.contains(currentMarker) {
-                // This marker exists in this level, check if it's consistent
-                let sortedMarkers = markers.sorted()
-                if let currentIndex = sortedMarkers.firstIndex(of: currentMarker) {
-                    // Check if this marker follows a logical sequence
+                // DON'T sort markers - they should maintain their Y-position order
+                // Only check if the current marker follows a logical sequence with nearby markers
+                if let currentIndex = markers.firstIndex(of: currentMarker) {
+                    // Check if this marker follows a logical sequence with the previous marker
                     if currentIndex > 0 {
-                        let previousMarker = sortedMarkers[currentIndex - 1]
+                        let previousMarker = markers[currentIndex - 1]
                         if !isLogicalSequence(previousMarker, currentMarker) {
                             logger.debug("❌ Header numbering misaligned: '\(previousMarker)' -> '\(currentMarker)'")
                             return true
