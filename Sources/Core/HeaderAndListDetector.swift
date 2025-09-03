@@ -2999,19 +2999,21 @@ public class HeaderAndListDetector {
     private func isHeaderNumberingMisaligned(_ text: String, pageContext: PageHeaderContext) -> Bool {
         guard let currentMarker = extractHeaderMarker(text) else { return false }
         
-        // Check each header level for misalignment
-        for (level, markers) in pageContext.headerNumberingByLevel {
-            if markers.contains(currentMarker) {
-                // DON'T sort markers - they should maintain their Y-position order
-                // Only check if the current marker follows a logical sequence with nearby markers
-                if let currentIndex = markers.firstIndex(of: currentMarker) {
-                    // Check if this marker follows a logical sequence with the previous marker
-                    if currentIndex > 0 {
-                        let previousMarker = markers[currentIndex - 1]
-                        if !isLogicalSequence(previousMarker, currentMarker) {
-                            logger.debug("❌ Header numbering misaligned: '\(previousMarker)' -> '\(currentMarker)'")
-                            return true
-                        }
+        // Calculate the current header's level to only check against same-level headers
+        let currentLevel = calculateHeaderLevel(from: text)
+        
+        // Only check the same level as the current header
+        if let markers = pageContext.headerNumberingByLevel[currentLevel],
+           markers.contains(currentMarker) {
+            // DON'T sort markers - they should maintain their Y-position order
+            // Only check if the current marker follows a logical sequence with nearby markers
+            if let currentIndex = markers.firstIndex(of: currentMarker) {
+                // Check if this marker follows a logical sequence with the previous marker
+                if currentIndex > 0 {
+                    let previousMarker = markers[currentIndex - 1]
+                    if !isLogicalSequence(previousMarker, currentMarker) {
+                        logger.debug("❌ Header numbering misaligned: '\(previousMarker)' -> '\(currentMarker)'")
+                        return true
                     }
                 }
             }
@@ -3049,54 +3051,46 @@ public class HeaderAndListDetector {
                 return true
             }
             
-            // Check if it's the same level but next number
-            let prevDots = previous.filter { $0 == "." }.count
-            let currDots = current.filter { $0 == "." }.count
+            // Compute the comparable level (the level at which they should be compared)
+            let prevComponents = previous.components(separatedBy: ".")
+            let currComponents = current.components(separatedBy: ".")
             
-            // Handle same level and different level sequences
+            // The comparable level is the minimum of the two levels
+            let comparableLevel = min(prevComponents.count, currComponents.count)
             
-            // Same level (same number of dots)
-            if prevDots == currDots {
-                // For single numbers: "3" -> "4"
-                if prevDots == 0 {
-                    if let prevNum = Int(previous), let currNum = Int(current) {
-                        return currNum == prevNum + 1
-                    }
-                } else {
-                    // For decimal numbers: "3.15" -> "3.16", "3.1.2" -> "3.1.3", etc.
-                    let prevComponents = previous.components(separatedBy: ".")
-                    let currComponents = current.components(separatedBy: ".")
-                    
-                    if prevComponents.count == currComponents.count {
-                        // Check if all components except the last are the same
-                        let prefixMatch = zip(prevComponents.dropLast(), currComponents.dropLast()).allSatisfy { $0 == $1 }
-                        if prefixMatch {
-                                                    // Check if the last component is incremented by 1
-                        if let prevLast = Int(prevComponents.last ?? ""),
-                           let currLast = Int(currComponents.last ?? "") {
-                            // Allow for reasonable gaps in numbering (e.g., 3.6 -> 3.8 is valid)
-                            // Only flag as misaligned if the gap is too large (more than 5)
-                            let gap = currLast - prevLast
-                            return gap >= 1 && gap <= 5
-                        }
-                        }
+            // Compare at the comparable level
+            if comparableLevel > 0 {
+                let prevAtComparableLevel = prevComponents.prefix(comparableLevel).joined(separator: ".")
+                let currAtComparableLevel = currComponents.prefix(comparableLevel).joined(separator: ".")
+                
+                // If they're the same at the comparable level, they're aligned
+                if prevAtComparableLevel == currAtComparableLevel {
+                    return true
+                }
+                
+                // If they're different at the comparable level, check if current is the next logical sequence
+                if comparableLevel <= prevComponents.count && comparableLevel <= currComponents.count {
+                    // Compare the component at the comparable level
+                    if let prevNum = Int(prevComponents[comparableLevel - 1]),
+                       let currNum = Int(currComponents[comparableLevel - 1]) {
+                        // Allow for reasonable gaps in numbering (e.g., 3.6 -> 3.8 is valid)
+                        let gap = currNum - prevNum
+                        return gap >= 1 && gap <= 5
                     }
                 }
-            } else {
-                // Different levels: find the shorter one and evaluate leftmost common part
-                let prevComponents = previous.components(separatedBy: ".")
-                let currComponents = current.components(separatedBy: ".")
-                
-                // Find the shorter one (fewer components)
-                let shorterComponents = prevComponents.count <= currComponents.count ? prevComponents : currComponents
-                let longerComponents = prevComponents.count <= currComponents.count ? currComponents : prevComponents
-                
-                // Check if the shorter one is a prefix of the longer one
-                if shorterComponents.count > 0 {
-                    let commonPrefix = Array(longerComponents.prefix(shorterComponents.count))
-                    if commonPrefix == shorterComponents {
-                        // They share the same prefix, so they are aligned
-                        return true
+            }
+            
+            // Handle same level sequences (same number of components)
+            if prevComponents.count == currComponents.count {
+                // Check if all components except the last are the same
+                let prefixMatch = zip(prevComponents.dropLast(), currComponents.dropLast()).allSatisfy { $0 == $1 }
+                if prefixMatch {
+                    // Check if the last component is incremented by 1
+                    if let prevLast = Int(prevComponents.last ?? ""),
+                       let currLast = Int(currComponents.last ?? "") {
+                        // Allow for reasonable gaps in numbering (e.g., 3.6 -> 3.8 is valid)
+                        let gap = currLast - prevLast
+                        return gap >= 1 && gap <= 5
                     }
                 }
             }
@@ -3104,9 +3098,9 @@ public class HeaderAndListDetector {
             // Check for different levels: "3.18" -> "4" (subsection to new major section)
             // If previous has dots (like "3.18") and current doesn't (like "4"), 
             // it's likely a new major section, which is valid
-            if prevDots > 0 && currDots == 0 {
-                if let prevMajor = Int(previous.components(separatedBy: ".").first ?? ""),
-                   let currMajor = Int(current) {
+            if prevComponents.count > 1 && currComponents.count == 1 {
+                if let prevMajor = Int(prevComponents.first ?? ""),
+                   let currMajor = Int(currComponents.first ?? "") {
                     return currMajor == prevMajor + 1
                 }
             }

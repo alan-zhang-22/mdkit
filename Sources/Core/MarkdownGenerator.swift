@@ -81,6 +81,11 @@ public final class MarkdownGenerator: Sendable {
         
         var markdownLines: [String] = []
         
+        // Add a newline at the beginning of each new page (except the first page)
+        if !isFirstPage {
+            markdownLines.append("")
+        }
+        
         // Add front matter only for the first page
         if isFirstPage {
             // Extract meaningful title from first page elements
