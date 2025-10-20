@@ -11,7 +11,6 @@
 		E7ED2F252E5C14A10042F077 /* MDKitCore in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F242E5C14A10042F077 /* MDKitCore */; };
 		E7ED2F272E5C14A10042F077 /* MDKitFileManagement in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F262E5C14A10042F077 /* MDKitFileManagement */; };
 		E7ED2F292E5C14A10042F077 /* MDKitLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F282E5C14A10042F077 /* MDKitLLM */; };
-		E7ED2F2B2E5C14A10042F077 /* MDKitLogging in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F2A2E5C14A10042F077 /* MDKitLogging */; };
 		E7ED2F2E2E5C16490042F077 /* ArgumentParser in Frameworks */ = {isa = PBXBuildFile; productRef = E7ED2F2D2E5C16490042F077 /* ArgumentParser */; };
 /* End PBXBuildFile section */
 
@@ -50,7 +49,6 @@
 				E7ED2F272E5C14A10042F077 /* MDKitFileManagement in Frameworks */,
 				E7ED2F252E5C14A10042F077 /* MDKitCore in Frameworks */,
 				E7ED2F2E2E5C16490042F077 /* ArgumentParser in Frameworks */,
-				E7ED2F2B2E5C14A10042F077 /* MDKitLogging in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -106,7 +104,6 @@
 				E7ED2F242E5C14A10042F077 /* MDKitCore */,
 				E7ED2F262E5C14A10042F077 /* MDKitFileManagement */,
 				E7ED2F282E5C14A10042F077 /* MDKitLLM */,
-				E7ED2F2A2E5C14A10042F077 /* MDKitLogging */,
 				E7ED2F2D2E5C16490042F077 /* ArgumentParser */,
 			);
 			productName = mdkit;
@@ -376,10 +373,6 @@
 		E7ED2F282E5C14A10042F077 /* MDKitLLM */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = MDKitLLM;
-		};
-		E7ED2F2A2E5C14A10042F077 /* MDKitLogging */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = MDKitLogging;
 		};
 		E7ED2F2D2E5C16490042F077 /* ArgumentParser */ = {
 			isa = XCSwiftPackageProductDependency;

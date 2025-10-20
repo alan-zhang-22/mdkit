@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "mdkitLibraries",
     platforms: [
-        .macOS(.v26) // Required for RecognizeDocumentsRequest, DocumentObservation, and async/await support
+        .macOS(.v14) // Required for Vision framework and async/await support
     ],
     products: [
         // Executable target for command-line usage
